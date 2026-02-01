@@ -4,12 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       run_build:
-        description: 'イメージをビルド・プッシュする (requirements.txt 変更時など)'
-        required: true
+        description: '1. [ビルド] イメージをビルドして GHCR へプッシュ'
+        required: false
         type: boolean
         default: false
-      run_deploy:
-        description: 'サーバーへコードをデプロイし、再起動する'
+      run_deploy_image:
+        description: '2. [デプロイ:イメージ] サーバーのイメージを更新 (Pull & Restart)'
+        required: false
+        type: boolean
+        default: false
+      run_deploy_code:
+        description: '3. [デプロイ:コード] サーバーのコードと設定を更新 (Git Pull & Restart)'
         required: false
         type: boolean
         default: false
@@ -51,6 +56,13 @@ jobs:
           echo "BACKEND_IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
           echo "BACKEND_REF=${{ github.event.inputs.backend_ref }}" >> $GITHUB_ENV
           
+          # デプロイ関連のフラグをセット
+          IS_RUN_DEPLOY_ANYTHING="false"
+          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ] || [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
+            IS_RUN_DEPLOY_ANYTHING="true"
+          fi
+          echo "IS_RUN_DEPLOY_ANYTHING=${IS_RUN_DEPLOY_ANYTHING}" >> $GITHUB_ENV
+          
           # Ansibleのgroup_vars/all.ymlから変数を取得
           # GitHub Actions Runner上で実行されるため、yqで直接パースする
           
@@ -82,7 +94,7 @@ jobs:
 
       # --- デプロイ準備 (デプロイ実行時のみ) ---
       - name: Setup SSH for Production Deployment
-        if: github.event.inputs.run_deploy == 'true'
+        if: env.IS_RUN_DEPLOY_ANYTHING == 'true'
         run: |
           mkdir -p ~/.ssh
           # 特定のファイル名に依存せず "ansible_deploy_key" という名前で保存
@@ -92,7 +104,7 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Setup Ansible Vault for Production Deployment
-        if: github.event.inputs.run_deploy == 'true'
+        if: env.IS_RUN_DEPLOY_ANYTHING == 'true'
         uses: ./.github/actions/setup-ansible-vault
         with:
           ansible_vault_password: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
@@ -112,10 +124,23 @@ jobs:
           
           docker push ${{ env.BACKEND_IMAGE_NAME }}:${{ env.BACKEND_IMAGE_TAG }}
 
-      # --- デプロイ工程 (run_deploy が true の場合のみ) ---
+      # --- デプロイ工程 (イメージ更新またはコード更新が選択された場合) ---
       - name: Deploy Backend Application
-        if: github.event.inputs.run_deploy == 'true'
+        if: env.IS_RUN_DEPLOY_ANYTHING == 'true'
         run: |
+          TAGS=""
+          
+          # イメージ更新が選ばれたら
+          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
+            TAGS="deploy-compose,update-backend-image"
+          fi
+          
+          # コード更新が選ばれたら（カンマで連結、すでにTAGSがあればカンマを挟む）
+          if [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
+            [ -n "$TAGS" ] && TAGS="$TAGS,"
+            TAGS="${TAGS}deploy-backend,restart-backend"
+          fi
+          
           cd ansible
           ansible-playbook playbook_deploy_backend.yml \
             --inventory inventory/production.yml \
@@ -128,4 +153,4 @@ jobs:
               "backend_ref": "${{ env.BACKEND_REF }}",
               "backend_image_tag": "${{ env.BACKEND_IMAGE_TAG }}"
             }' \
-            --tags "deploy-compose,deploy-backend,update-backend-image,restart-backend"
+            --tags "$TAGS"
