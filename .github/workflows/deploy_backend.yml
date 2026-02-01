@@ -3,18 +3,13 @@ name: Deploy Backend
 on:
   workflow_dispatch:
     inputs:
-      run_build:
-        description: '1. [ビルド] イメージをビルドして GHCR へプッシュ'
-        required: false
-        type: boolean
-        default: false
       run_deploy_image:
-        description: '2. [デプロイ:イメージ] サーバーのイメージを更新 (Pull & Restart)'
+        description: '1. [デプロイ:イメージ] サーバーのイメージを更新 (Pull & Restart)'
         required: false
         type: boolean
         default: false
       run_deploy_code:
-        description: '3. [デプロイ:コード] サーバーのコードと設定を更新 (Git Pull & Restart)'
+        description: '2. [デプロイ:コード] サーバーのコードと設定を更新 (Git Pull & Restart)'
         required: false
         type: boolean
         default: false
@@ -33,11 +28,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # GHCRへのプッシュのため
 
     steps:
       - name: Checkout art-gallery-release-tools repository
         uses: actions/checkout@v4
+
+      - name: Validate Inputs
+        run: |
+          if [ "${{ github.event.inputs.run_deploy_image }}" != "true" ] && [ "${{ github.event.inputs.run_deploy_code }}" != "true" ]; then
+            echo "::error::'run_deploy_image' または 'run_deploy_code' の少なくとも一方は 'true' に設定してください。"
+            exit 1
+          fi
 
       - name: Install yq (YAML processor)
         run: |
@@ -56,13 +57,6 @@ jobs:
           echo "BACKEND_IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
           echo "BACKEND_REF=${{ github.event.inputs.backend_ref }}" >> $GITHUB_ENV
           
-          # デプロイ関連のフラグをセット
-          IS_RUN_DEPLOY_ANYTHING="false"
-          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ] || [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
-            IS_RUN_DEPLOY_ANYTHING="true"
-          fi
-          echo "IS_RUN_DEPLOY_ANYTHING=${IS_RUN_DEPLOY_ANYTHING}" >> $GITHUB_ENV
-          
           # Ansibleのgroup_vars/all.ymlから変数を取得
           # GitHub Actions Runner上で実行されるため、yqで直接パースする
           
@@ -79,22 +73,14 @@ jobs:
           echo "BACKEND_REPO_NAME=${BACKEND_REPO_NAME}" >> $GITHUB_ENV
           echo "BACKEND_IMAGE_NAME=${GHCR_BASE_REGISTRY}/${GITHUB_OWNER}/${BACKEND_REPO_NAME}" >> $GITHUB_ENV
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Install Ansible and dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ansible
           ansible-galaxy collection install community.docker
 
-      # --- デプロイ準備 (デプロイ実行時のみ) ---
+      # --- デプロイ準備 ---
       - name: Setup SSH for Production Deployment
-        if: env.IS_RUN_DEPLOY_ANYTHING == 'true'
         run: |
           mkdir -p ~/.ssh
           # 特定のファイル名に依存せず "ansible_deploy_key" という名前で保存
@@ -104,7 +90,6 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Setup Ansible Vault for Production Deployment
-        if: env.IS_RUN_DEPLOY_ANYTHING == 'true'
         uses: ./.github/actions/setup-ansible-vault
         with:
           ansible_vault_password: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
@@ -112,21 +97,8 @@ jobs:
           db_password_plaintext: ${{ secrets.PROD_DB_PASSWORD_PLAINTEXT }}
           secret_key_plaintext: ${{ secrets.PROD_SECRET_KEY_PLAINTEXT }}
 
-      # --- ビルド工程 (run_build が true の場合のみ) ---
-      - name: Build and Push Backend Image with Ansible
-        if: github.event.inputs.run_build == 'true'
-        run: |
-          cd ansible
-          ansible-playbook playbook_build_backend.yml \
-            --inventory inventory/ci.yml \
-            --extra-vars '{"target_hosts":"ci-server", "backend_image_tag":"${{ env.BACKEND_IMAGE_TAG }}"}' \
-            --tags "build-backend"
-          
-          docker push ${{ env.BACKEND_IMAGE_NAME }}:${{ env.BACKEND_IMAGE_TAG }}
-
-      # --- デプロイ工程 (イメージ更新またはコード更新が選択された場合) ---
+      # --- デプロイ工程 ---
       - name: Deploy Backend Application
-        if: env.IS_RUN_DEPLOY_ANYTHING == 'true'
         run: |
           TAGS=""
           
