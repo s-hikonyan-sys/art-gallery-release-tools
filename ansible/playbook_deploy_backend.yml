@@ -1,0 +1,45 @@
+---
+# バックエンドデプロイ専用プレイブック
+# バックエンドのコード、設定、コンテナのデプロイと再起動を実行します
+# 実装物（app.py等）はボリュームマウントで提供され、イメージには含まれません
+
+- name: Deploy Backend Application
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  pre_tasks:
+    - name: Setup vault configuration
+      ansible.builtin.import_tasks: tasks/setup-vault.yml
+      tags: [always]
+
+  tasks:
+    - name: Deploy docker-compose.yml
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: deploy_compose
+      tags:
+        - docker
+        - deploy-compose
+        - deploy-backend
+
+    - name: Deploy backend (source and config)
+      ansible.builtin.include_role:
+        name: backend
+      tags:
+        - deploy-backend
+
+    - name: Update backend container only (pull and restart)
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: container/update/update_backend_image
+      tags:
+        - docker
+        - update-backend-image
+
+    - name: Restart backend container only
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: container/restart/restart_backend
+      tags:
+        - docker
+        - restart-backend
