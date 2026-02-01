@@ -12,7 +12,7 @@ on:
         description: 'サーバーへコードをデプロイし、再起動する'
         required: false
         type: boolean
-        default: true
+        default: false
       release_version:
         description: 'デプロイ対象のリリースバージョン (例: v1.0.0。未指定時はリポジトリ変数を参照)'
         required: false
