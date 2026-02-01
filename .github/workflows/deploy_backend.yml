@@ -80,11 +80,13 @@ jobs:
           sudo apt-get install -y ansible
           ansible-galaxy collection install community.docker
 
-      - name: Setup Ansible Vault
+      # --- デプロイ準備 (デプロイ実行時のみ) ---
+      - name: Setup Ansible Vault for Production Deployment
+        if: github.event.inputs.run_deploy == 'true'
         uses: ./.github/actions/setup-ansible-vault
         with:
           ansible_vault_password: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-          env_name: prod # または環境名に応じて
+          env_name: prod 
           db_password_plaintext: ${{ secrets.PROD_DB_PASSWORD_PLAINTEXT }}
           secret_key_plaintext: ${{ secrets.PROD_SECRET_KEY_PLAINTEXT }}
 
@@ -93,31 +95,20 @@ jobs:
         if: github.event.inputs.run_build == 'true'
         run: |
           cd ansible
-          ansible-playbook build.yml \
+          ansible-playbook playbook_build_backend.yml \
             --inventory inventory/ci.yml \
-            --vault-password-file .vault_pass \
             --extra-vars '{"target_hosts":"ci-server", "backend_image_tag":"${{ env.BACKEND_IMAGE_TAG }}"}' \
             --tags "build-backend"
           
           docker push ${{ env.BACKEND_IMAGE_NAME }}:${{ env.BACKEND_IMAGE_TAG }}
 
       # --- デプロイ工程 (run_deploy が true の場合のみ) ---
-      - name: Update Backend Image on Server (Container only)
-        if: github.event.inputs.run_deploy == 'true' && github.event.inputs.run_build == 'true'
-        run: |
-          cd ansible
-          ansible-playbook deploy.yml \
-            --inventory inventory/production.yml \
-            --vault-password-file .vault_pass \
-            --extra-vars '{"target_hosts":"production", "backend_image_tag":"${{ env.BACKEND_IMAGE_TAG }}"}' \
-            --tags "update-backend-image"
-
-      - name: Deploy Backend Code and Restart (Code only)
+      - name: Deploy Backend Application
         if: github.event.inputs.run_deploy == 'true'
         run: |
           cd ansible
-          ansible-playbook deploy.yml \
+          ansible-playbook playbook_deploy_backend.yml \
             --inventory inventory/production.yml \
             --vault-password-file .vault_pass \
             --extra-vars '{"target_hosts":"production", "backend_ref":"${{ env.BACKEND_REF }}", "backend_image_tag":"${{ env.BACKEND_IMAGE_TAG }}"}' \
-            --tags "deploy-compose,deploy-backend,restart-backend"
+            --tags "deploy-compose,deploy-backend,update-backend-image,restart-backend"
