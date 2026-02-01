@@ -38,7 +38,7 @@ services:
     volumes:
       - ./conf/backend/config:/app/config:ro
       - ./logs/backend:/app/logs:rw
-      - ./src/{{ service_repo_names.backend }}:/app:ro
+      - ./src/{{ service_repo_names.backend }}:/app
     restart: unless-stopped
     networks:
       - {{ docker_network_name | mandatory('docker_network_name must be set in inventory') }}
