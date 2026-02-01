@@ -6,9 +6,9 @@ all:
     production:
       hosts:
         production-server:
-          ansible_host: 219.94.248.165
-          ansible_user: ssh-admin
-          ansible_ssh_private_key_file: "~/.ssh/id_ed25519" # ワークフローの作成パスに合わせる
+          ansible_host: "{{ prod_host | mandatory('prod_host must be provided') }}"
+          ansible_user: "{{ prod_ssh_user | mandatory('prod_ssh_user must be provided') }}"
+          ansible_ssh_private_key_file: "{{ prod_ssh_key_path | mandatory('prod_ssh_key_path must be provided') }}"
           ansible_python_interpreter: /usr/bin/python3
           ansible_become: yes
           

@@ -81,6 +81,16 @@ jobs:
           ansible-galaxy collection install community.docker
 
       # --- デプロイ準備 (デプロイ実行時のみ) ---
+      - name: Setup SSH for Production Deployment
+        if: github.event.inputs.run_deploy == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          # 特定のファイル名に依存せず "ansible_deploy_key" という名前で保存
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_deploy_key
+          chmod 600 ~/.ssh/ansible_deploy_key
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
       - name: Setup Ansible Vault for Production Deployment
         if: github.event.inputs.run_deploy == 'true'
         uses: ./.github/actions/setup-ansible-vault
@@ -110,5 +120,12 @@ jobs:
           ansible-playbook playbook_deploy_backend.yml \
             --inventory inventory/production.yml \
             --vault-password-file .vault_pass \
-            --extra-vars '{"target_hosts":"production", "backend_ref":"${{ env.BACKEND_REF }}", "backend_image_tag":"${{ env.BACKEND_IMAGE_TAG }}"}' \
+            --extra-vars '{
+              "target_hosts": "production",
+              "prod_host": "${{ vars.PROD_HOST }}",
+              "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
+              "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
+              "backend_ref": "${{ env.BACKEND_REF }}",
+              "backend_image_tag": "${{ env.BACKEND_IMAGE_TAG }}"
+            }' \
             --tags "deploy-compose,deploy-backend,update-backend-image,restart-backend"
