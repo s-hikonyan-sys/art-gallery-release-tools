@@ -10,7 +10,7 @@ on:
         default: false
       run_deploy:
         description: 'サーバーへコードをデプロイし、再起動する'
-        required: true
+        required: false
         type: boolean
         default: true
       release_version:
