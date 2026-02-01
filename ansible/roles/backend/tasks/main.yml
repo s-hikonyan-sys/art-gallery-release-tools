@@ -1,0 +1,35 @@
+---
+# バックエンドデプロイロール
+# 環境別処理と用途別処理を統合
+
+# ローカル環境用のデプロイ処理
+- name: Include local deployment tasks
+  ansible.builtin.include_tasks: local.yml
+  when: ansible_connection == 'local'
+  tags:
+    - backend
+    - deploy
+    - deploy-backend
+    - deploy-all
+
+# デプロイ関連処理（設定ファイル生成）
+- name: Include deploy tasks
+  ansible.builtin.include_tasks: deploy.yml
+  tags:
+    - deploy
+    - deploy-backend
+    - deploy-all
+
+# Vault関連処理（暗号化ファイル生成）
+- name: Include vault tasks
+  ansible.builtin.include_tasks: vault.yml
+  tags:
+    - deploy
+    - deploy-backend
+    - deploy-all
+
+# 検証処理
+- name: Include verify tasks
+  ansible.builtin.include_tasks: verify.yml
+  tags:
+    - verify

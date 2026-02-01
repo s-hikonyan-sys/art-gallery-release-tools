@@ -1,0 +1,78 @@
+---
+# バックエンドデプロイ関連処理
+# 設定ファイル生成など
+
+# Vault変数の読み込み（secrets_vault_file_path は pre_tasks で設定済み）
+- name: Load vault variables
+  ansible.builtin.include_vars:
+    file: "{{ secrets_vault_file_path }}"
+  tags:
+    - backend
+    - deploy
+    - deploy-backend
+    - deploy-all
+
+- name: Ensure backend logs directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.logs_dir }}/backend"
+    state: directory
+    mode: '0755'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - backend
+    - deploy
+    - deploy-backend
+    - deploy-all
+
+- name: Ensure backend config directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.conf_dir }}/backend/config"
+    state: directory
+    mode: '0700'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - backend
+    - deploy
+    - deploy-backend
+    - deploy-all
+
+- name: Create config.yaml from template
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ deployment_paths.conf_dir }}/backend/config/config.yaml"
+    mode: '0600'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - backend
+    - deploy
+    - deploy-backend
+    - deploy-all
+
+- name: Ensure backend source directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - backend
+    - deploy
+    - deploy-backend
+    - deploy-all
+
+- name: Deploy backend application code from GitHub
+  ansible.builtin.git:
+    repo: "https://github.com/{{ github_owner }}/{{ service_repo_names.backend }}.git"
+    dest: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}"
+    version: "{{ backend_ref | mandatory('backend_ref must be provided') }}"
+    accept_hostkey: yes
+    force: yes
+  become: yes
+  tags:
+    - backend
+    - deploy-backend
+    - deploy-all

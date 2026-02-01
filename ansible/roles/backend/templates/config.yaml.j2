@@ -1,0 +1,27 @@
+# アプリケーション設定ファイル（Ansibleテンプレート）
+# このファイルは環境ごとに異なる値が設定されます
+# セキュリティ上問題のない設定項目のみを記述します
+# 機密情報は secrets.yaml.encrypted で管理します
+
+# サーバー設定
+server:
+  port: {{ backend_port | mandatory('backend_port must be set in inventory') }}
+  flask_env: {{ flask_env | mandatory('flask_env must be set in inventory') }}
+  debug: {{ debug | mandatory('debug must be set in inventory') }}
+
+# フロントエンド設定
+frontend:
+  url: {{ frontend_url | mandatory('frontend_url must be set in inventory') }}
+
+# データベース設定（非機密情報のみ）
+database:
+  host: {{ database_host | mandatory('database_host must be set in inventory') }}
+  port: {{ database_port | mandatory('database_port must be set in inventory') }}
+  name: {{ database_name | mandatory('database_name must be set in inventory') }}
+  user: {{ database_user | mandatory('database_user must be set in inventory') }}
+  # password は secrets.yaml.encrypted で管理
+
+# 暗号化キー（Fernetで使用）
+# vault-config.yaml.vault.*から取得されます
+secret_key: "{{ secret_key }}"
+

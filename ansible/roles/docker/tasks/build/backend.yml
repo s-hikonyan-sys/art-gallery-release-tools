@@ -1,0 +1,76 @@
+---
+# バックエンドコンテナイメージのビルド
+# 準備 → ビルド → 後処理の順で実行
+
+# === 準備 ===
+- name: Create temporary build directory for backend
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: backend-build
+  register: backend_build_dir
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-backend
+
+- name: Ensure internal directory exists in temporary build directory
+  ansible.builtin.file:
+    path: "{{ backend_build_dir.path }}/internal"
+    state: directory
+    mode: '0755'
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-backend
+
+- name: Copy backend Dockerfile to temporary directory
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/roles/backend/internal/Dockerfile"
+    dest: "{{ backend_build_dir.path }}/Dockerfile"
+    mode: '0644'
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-backend
+
+- name: Copy requirements.txt to internal directory for Docker build cache
+  ansible.builtin.copy:
+    src: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}/requirements.txt"
+    dest: "{{ backend_build_dir.path }}/internal/requirements.txt"
+    mode: '0644'
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-backend
+
+# === ビルド ===
+- name: Build backend container image
+  community.docker.docker_image:
+    name: "{{ image_names.backend | mandatory('image_names.backend must be set in inventory') }}"
+    tag: "{{ backend_image_tag | mandatory('backend_image_tag must be provided via extra-vars or a variable source') }}"
+    build:
+      path: "{{ backend_build_dir.path }}"
+      dockerfile: Dockerfile
+      pull: yes
+    source: build
+    state: present
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-backend
+
+# === 後処理 ===
+- name: Remove temporary build directory for backend
+  ansible.builtin.file:
+    path: "{{ backend_build_dir.path }}"
+    state: absent
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-backend

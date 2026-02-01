@@ -1,0 +1,43 @@
+name: 'Setup Ansible Vault'
+description: 'Creates an Ansible Vault file for a specific environment with provided secrets.'
+
+inputs:
+  ansible_vault_password:
+    description: 'The password to encrypt the Ansible Vault file.'
+    required: true
+  env_name:
+    description: 'The environment name (e.g., prod, dev) for the vault file.'
+    required: true
+  db_password_plaintext:
+    description: 'The plaintext database password to be stored in the vault.'
+    required: true
+  secret_key_plaintext:
+    description: 'The plaintext secret key to be stored in the vault.'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Create Vault Password File
+      shell: bash
+      run: |
+        echo "${{ inputs.ansible_vault_password }}" > ansible/.vault_pass
+        chmod 600 ansible/.vault_pass
+
+    - name: Create Ansible vault files for ${{ inputs.env_name }}
+      shell: bash
+      env:
+        PROD_DB_PASSWORD_PLAINTEXT: ${{ inputs.db_password_plaintext }}
+        PROD_SECRET_KEY_PLAINTEXT: ${{ inputs.secret_key_plaintext }}
+      run: |
+        mkdir -p ansible/vault
+        cat <<EOF > /tmp/vault-config.yaml
+        secret_key: ${{ env.PROD_SECRET_KEY_PLAINTEXT }}
+        database:
+          password: ${{ env.PROD_DB_PASSWORD_PLAINTEXT }}
+        EOF
+        ansible-vault encrypt \
+          --vault-password-file ansible/.vault_pass \
+          --output ansible/vault/vault-config.yaml.vault.${{ inputs.env_name }} \
+          /tmp/vault-config.yaml
+        rm /tmp/vault-config.yaml

@@ -1,0 +1,71 @@
+---
+# バックエンドVault関連処理
+# vault-config.yaml.vaultからsecrets.yaml.encryptedを生成
+
+# 重要: vault-config.yaml.vault.*は必須ファイル（絶対のルール）
+# - playbook.yml の pre_tasks で存在チェックとパス設定（secrets_vault_file_path）が完了していることが前提
+
+- name: Read secret_key from vault file
+  ansible.builtin.shell: |
+    ansible-vault decrypt --output - --vault-password-file {{ playbook_dir }}/.vault_pass "{{ secrets_vault_file_path }}" | python3 -c "
+    import sys
+    import yaml
+    data = yaml.safe_load(sys.stdin) or {}
+    secret_key = data.get('secret_key', '')
+    if secret_key:
+        print(secret_key)
+    else:
+        sys.exit(1)
+    "
+  register: vault_secret_key_result
+  changed_when: false
+  delegate_to: localhost
+  become: no
+  run_once: true
+  tags:
+    - backend
+    - deploy
+    - deploy-all
+
+- name: Set secret_key fact
+  ansible.builtin.set_fact:
+    secret_key: "{{ vault_secret_key_result.stdout | trim }}"
+  tags:
+    - backend
+    - deploy
+    - deploy-all
+
+- name: Fail if secret_key is missing
+  ansible.builtin.fail:
+    msg: "vault-config.yaml.vault.*にsecret_keyが設定されていません"
+  when: secret_key | length == 0
+  tags:
+    - backend
+    - deploy
+    - deploy-all
+
+- name: Generate secrets.yaml.encrypted locally
+  ansible.builtin.shell: |
+    python3 {{ playbook_dir }}/scripts/encrypt_secrets.py \
+      "{{ secrets_vault_file_path }}" \
+      "{{ secret_key }}" \
+      "/tmp/secrets.yaml.encrypted"
+  changed_when: true
+  delegate_to: localhost
+  become: no
+  tags:
+    - backend
+    - deploy
+    - deploy-all
+
+- name: Copy secrets.yaml.encrypted to remote server
+  ansible.builtin.copy:
+    src: "/tmp/secrets.yaml.encrypted"
+    dest: "{{ deployment_paths.conf_dir }}/backend/config/secrets.yaml.encrypted"
+    mode: '0600'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - backend
+    - deploy
+    - deploy-all

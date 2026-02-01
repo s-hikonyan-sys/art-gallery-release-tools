@@ -1,0 +1,6 @@
+---
+# Docker Compose用の変数
+# 注意: db_passwordはvault-config.yaml.vault.*から取得されるため、default()は不要
+
+db_password: "{{ db_password }}"
+

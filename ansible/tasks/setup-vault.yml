@@ -1,0 +1,33 @@
+---
+# Vaultファイルのパス決定と存在確認を行う共通タスク
+
+- name: Set environment-specific secrets vault file path
+  ansible.builtin.set_fact:
+    secrets_vault_file_path: "{{ vault_config.vault_file.production if 'production' in group_names else vault_config.vault_file.dev if 'local' in group_names or 'ci-server' in group_names or 'dev' in group_names else '' }}"
+  delegate_to: localhost
+  become: no
+  run_once: true
+
+- name: Fail if secrets vault file path is not set for the environment
+  ansible.builtin.fail:
+    msg: "Secrets vault file path is not set for the current environment. Please ensure 'production', 'local', 'dev' or 'ci-server' is in group_names."
+  when: secrets_vault_file_path == ''
+  delegate_to: localhost
+  become: no
+  run_once: true
+
+- name: Check if environment-specific vault-config.yaml.vault exists
+  ansible.builtin.stat:
+    path: "{{ secrets_vault_file_path }}"
+  register: secrets_vault_file_check
+  delegate_to: localhost
+  become: no
+  run_once: true
+
+- name: Fail if environment-specific vault-config.yaml.vault does not exist
+  ansible.builtin.fail:
+    msg: "Environment-specific vault-config.yaml.vault is missing. Please create {{ secrets_vault_file_path }}"
+  when: not secrets_vault_file_check.stat.exists
+  delegate_to: localhost
+  become: no
+  run_once: true

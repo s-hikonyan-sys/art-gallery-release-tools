@@ -1,0 +1,47 @@
+---
+# CI環境 (GitHub Actions Runner) 固有のインベントリ
+# ローカル接続でAnsibleを実行します
+
+all:
+  children:
+    ci-server: # target_hosts として指定されるグループ名
+      hosts:
+        localhost:
+          ansible_connection: local
+          ansible_user: "runner" # GitHub Actions Runner のデフォルトユーザー
+          ansible_python_interpreter: /usr/bin/python3
+          ansible_become: no # CI環境ではsudoを使用しない
+          
+          # 環境固有の生の値
+          domain_name: localhost
+          deployment_dir: "/tmp/art-gallery-build" # CI環境の作業ディレクトリ
+          app_user: "runner" # CI環境でのアプリケーション実行ユーザー
+          client_max_body_size: "10M"
+
+          # Backend/Nginx 設定
+          debug: true
+          flask_env: "development"
+
+          # SSL設定 (CI環境では無効)
+          ssl_enabled: false
+          
+          # Nginx ポート設定
+          nginx_http_external_port: 80
+          nginx_https_external_port: 443
+          
+          # Backend ホスト・ポート (コンテナ間通信)
+          backend_host: backend
+          backend_port: 8080
+
+          # Database ホスト・ポート
+          database_host: postgres
+          database_port: 5432
+          database_name: art_gallery_dev
+          database_user: artuser
+
+          # CI環境でのDockerイメージ名
+          image_names:
+            postgres: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.postgres }}"
+            backend: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.backend }}"
+            nginx: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.nginx }}"
+            frontend: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.frontend }}"

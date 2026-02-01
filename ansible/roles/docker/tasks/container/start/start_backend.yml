@@ -1,0 +1,13 @@
+---
+# バックエンドコンテナの起動
+# イメージが存在しない場合はプルを試みます
+
+- name: Start backend container
+  ansible.builtin.shell: |
+    cd {{ deployment_dir }}
+    docker compose up -d backend
+  become: no
+  tags:
+    - docker
+    - start-app
+    - deploy-backend

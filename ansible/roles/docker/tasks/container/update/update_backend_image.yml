@@ -1,0 +1,18 @@
+---
+# バックエンドコンテナのイメージを更新し、再作成・再起動する
+
+- name: Pull latest Backend image and recreate container
+  community.docker.docker_compose_v2:
+    project_src: "{{ deployment_dir }}"
+    files:
+      - docker-compose.yml
+    services:
+      - "backend"
+    pull: always
+    recreate: always
+  environment:
+    DOCKER_CONFIG: "/home/{{ ansible_user }}/.docker"
+  become: no
+  tags:
+    - docker
+    - update-backend-image

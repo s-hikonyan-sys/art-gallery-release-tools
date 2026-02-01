@@ -1,0 +1,61 @@
+---
+# 全環境共通の構造定義と基幹変数
+
+# アプリケーション基本情報
+app_name: "art-gallery"
+
+# 各サービスのリポジトリ名・イメージ名の一元管理
+service_repo_names:
+  postgres: "art-gallery-postgres"
+  backend: "art-gallery-backend"
+  nginx: "art-gallery-nginx"
+  frontend: "art-gallery-frontend"
+
+# GitHub & GHCR 設定
+github_owner: "s-hikonyan-sys"
+ghcr_base_registry: "ghcr.io"
+
+# デプロイ関連ディレクトリ設定
+# 注意: 各インベントリファイルで deployment_dir の定義が必須です
+deployment_paths:
+  deployment_dir: "{{ deployment_dir }}"
+  src_dir: "{{ deployment_paths.deployment_dir }}/src"
+  dist_dir: "{{ deployment_paths.deployment_dir }}/dist"
+  conf_dir: "{{ deployment_paths.deployment_dir }}/conf"
+  logs_dir: "{{ deployment_paths.deployment_dir }}/logs"
+  remote_temp_dir: "{{ deployment_paths.deployment_dir }}/tmp"
+
+# Vault設定の構造化
+vault_config:
+  vault_file:
+    production: "{{ playbook_dir }}/../vault/vault-config.yaml.vault.prod"
+    dev: "{{ playbook_dir }}/../vault/vault-config.yaml.vault.dev"
+
+# コンテナ・イメージ名の命名規則（app_name から導出）
+# image_namesは各インベントリファイルで定義されます
+container_names:
+  postgres: "{{ app_name }}-db"
+  backend: "{{ app_name }}-api"
+  nginx: "{{ app_name }}-nginx"
+
+# URL設定（インベントリの domain_name と ssl_enabled から自動導出）
+# 注意: 各インベントリで ssl_enabled と domain_name の定義が必須です
+frontend_url: "{{ 'https' if ssl_enabled else 'http' }}://{{ domain_name }}"
+vite_api_base_url: "{{ frontend_url }}/api"
+
+# Dockerネットワーク名
+docker_network_name: "{{ app_name }}-network"
+
+# Dockerボリューム名
+docker_volume_postgres_data: "{{ app_name }}_postgres_data"
+
+# コンテナフィルター名（docker psフィルター用）
+container_filter_name: "{{ app_name }}"
+
+# ヘルスチェック等の共通設定（全環境で固定）
+health_check:
+  backend_path: "/api/health"
+  postgres:
+    interval: "10s"
+    timeout: "5s"
+    retries: 5

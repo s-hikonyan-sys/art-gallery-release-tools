@@ -1,0 +1,123 @@
+name: Deploy Backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_build:
+        description: 'イメージをビルド・プッシュする (requirements.txt 変更時など)'
+        required: true
+        type: boolean
+        default: false
+      run_deploy:
+        description: 'サーバーへコードをデプロイし、再起動する'
+        required: true
+        type: boolean
+        default: true
+      release_version:
+        description: 'デプロイ対象のリリースバージョン (例: v1.0.0。未指定時はリポジトリ変数を参照)'
+        required: false
+        type: string
+      backend_ref:
+        description: 'デプロイする backend リポジトリの ref (branch/tag/sha)'
+        required: false
+        default: 'main'
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # GHCRへのプッシュのため
+
+    steps:
+      - name: Checkout art-gallery-release-tools repository
+        uses: actions/checkout@v4
+
+      - name: Install yq (YAML processor)
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Set Context
+        id: context
+        run: |
+          VERSION="${{ github.event.inputs.release_version || vars.RELEASE_VERSION }}"
+          if [ -z "$VERSION" ]; then
+            echo "::error::RELEASE_VERSION が定義されていません。"
+            exit 1
+          fi
+          echo "RELEASE_VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "BACKEND_IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
+          echo "BACKEND_REF=${{ github.event.inputs.backend_ref }}" >> $GITHUB_ENV
+          
+          # Ansibleのgroup_vars/all.ymlから変数を取得
+          # GitHub Actions Runner上で実行されるため、yqで直接パースする
+          
+          GITHUB_OWNER=$(yq '.github_owner' ansible/group_vars/all.yml)
+          GHCR_BASE_REGISTRY=$(yq '.ghcr_base_registry' ansible/group_vars/all.yml)
+          BACKEND_REPO_NAME=$(yq '.service_repo_names.backend' ansible/group_vars/all.yml)
+          
+          if [ -z "${GITHUB_OWNER}" ] || [ -z "${GHCR_BASE_REGISTRY}" ] || [ -z "${BACKEND_REPO_NAME}" ]; then
+            echo "::error::Ansibleのgroup_vars/all.ymlから変数を取得できませんでした。"
+            exit 1
+          fi
+          
+          echo "GITHUB_OWNER=${GITHUB_OWNER}" >> $GITHUB_ENV
+          echo "BACKEND_REPO_NAME=${BACKEND_REPO_NAME}" >> $GITHUB_ENV
+          echo "BACKEND_IMAGE_NAME=${GHCR_BASE_REGISTRY}/${GITHUB_OWNER}/${BACKEND_REPO_NAME}" >> $GITHUB_ENV
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Ansible and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+          ansible-galaxy collection install community.docker
+
+      - name: Setup Ansible Vault
+        uses: ./.github/actions/setup-ansible-vault
+        with:
+          ansible_vault_password: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          env_name: prod # または環境名に応じて
+          db_password_plaintext: ${{ secrets.PROD_DB_PASSWORD_PLAINTEXT }}
+          secret_key_plaintext: ${{ secrets.PROD_SECRET_KEY_PLAINTEXT }}
+
+      # --- ビルド工程 (run_build が true の場合のみ) ---
+      - name: Build and Push Backend Image with Ansible
+        if: github.event.inputs.run_build == 'true'
+        run: |
+          cd ansible
+          ansible-playbook build.yml \
+            --inventory inventory/ci.yml \
+            --vault-password-file .vault_pass \
+            --extra-vars '{"target_hosts":"ci-server", "backend_image_tag":"${{ env.BACKEND_IMAGE_TAG }}"}' \
+            --tags "build-backend"
+          
+          docker push ${{ env.BACKEND_IMAGE_NAME }}:${{ env.BACKEND_IMAGE_TAG }}
+
+      # --- デプロイ工程 (run_deploy が true の場合のみ) ---
+      - name: Update Backend Image on Server (Container only)
+        if: github.event.inputs.run_deploy == 'true' && github.event.inputs.run_build == 'true'
+        run: |
+          cd ansible
+          ansible-playbook deploy.yml \
+            --inventory inventory/production.yml \
+            --vault-password-file .vault_pass \
+            --extra-vars '{"target_hosts":"production", "backend_image_tag":"${{ env.BACKEND_IMAGE_TAG }}"}' \
+            --tags "update-backend-image"
+
+      - name: Deploy Backend Code and Restart (Code only)
+        if: github.event.inputs.run_deploy == 'true'
+        run: |
+          cd ansible
+          ansible-playbook deploy.yml \
+            --inventory inventory/production.yml \
+            --vault-password-file .vault_pass \
+            --extra-vars '{"target_hosts":"production", "backend_ref":"${{ env.BACKEND_REF }}", "backend_image_tag":"${{ env.BACKEND_IMAGE_TAG }}"}' \
+            --tags "deploy-compose,deploy-backend,restart-backend"

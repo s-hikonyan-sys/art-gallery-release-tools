@@ -1,0 +1,82 @@
+---
+# ビルドプレイブック
+# アプリケーションのコンテナイメージ（ベースイメージ）とフロントエンドの成果物をビルドします
+# 注意: アプリケーション実装コードはコンテナイメージには含めず、ボリュームマウントで提供されます
+
+- name: Build Application Images
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  pre_tasks:
+    - name: Setup vault configuration
+      ansible.builtin.import_tasks: tasks/setup-vault.yml
+      tags: [always]
+
+  tasks:
+    - name: Build all container images
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: build/main
+      tags:
+        - docker
+        - build-all
+        - build
+
+    - name: Build postgres container only
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: build/postgres
+      tags:
+        - docker
+        - build-postgres
+
+    - name: Build nginx container only
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: build/nginx
+      tags:
+        - docker
+        - build-nginx
+
+    - name: Build backend container only
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: build/backend
+      tags:
+        - docker
+        - build-backend
+
+    - name: Ensure frontend dist directory exists locally for build
+      ansible.builtin.file:
+        path: "{{ deployment_paths.dist_dir }}/frontend"
+        state: directory
+        mode: '0755'
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+      delegate_to: localhost
+      become: no
+      tags:
+        - frontend
+        - frontend-build
+
+    - name: Ensure frontend dist assets directory exists locally for build
+      ansible.builtin.file:
+        path: "{{ deployment_paths.dist_dir }}/frontend/assets"
+        state: directory
+        mode: '0755'
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+      delegate_to: localhost
+      become: no
+      tags:
+        - frontend
+        - frontend-build
+
+    - name: Build frontend
+      ansible.builtin.include_role:
+        name: frontend
+      tags:
+        - frontend
+        - frontend-build
+        - rebuild
+        - restart-frontend
