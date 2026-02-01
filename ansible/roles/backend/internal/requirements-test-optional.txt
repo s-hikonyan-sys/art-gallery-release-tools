@@ -1,0 +1,27 @@
+# Backend test and CI optional dependencies
+# このファイルは、本番環境にはインストールされず、CI/テスト環境でのみ使用されます
+# 使用方法: pip install -r requirements.txt -r requirements-test-optional.txt
+
+# テストフレームワーク
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# 静的解析・コード品質ツール
+flake8>=6.0.0
+pylint>=2.17.0
+mypy>=1.5.0
+
+# コードフォーマッタ
+black>=23.0.0
+isort>=5.12.0
+
+# 型チェック用の型定義
+types-requests>=2.31.0
+types-PyYAML>=6.0.0
+
+# セキュリティチェック
+bandit>=1.7.5
+
+# ドキュメント生成
+pydocstyle>=6.3.0
