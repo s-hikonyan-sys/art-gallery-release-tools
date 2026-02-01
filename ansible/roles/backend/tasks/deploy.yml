@@ -51,19 +51,6 @@
     - deploy-backend
     - deploy-all
 
-- name: Ensure backend source directory exists
-  ansible.builtin.file:
-    path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}"
-    state: directory
-    mode: '0755'
-    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
-    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
-  tags:
-    - backend
-    - deploy
-    - deploy-backend
-    - deploy-all
-
 - name: Deploy backend application code from GitHub
   ansible.builtin.git:
     repo: "https://{{ github_token_backend }}@github.com/{{ github_owner }}/{{ service_repo_names.backend }}.git"
