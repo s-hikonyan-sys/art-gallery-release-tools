@@ -1,28 +1,29 @@
 services:
-  postgres:
-    image: "{{ image_names.postgres | mandatory('image_names.postgres must be set in inventory') }}"
-    # 注意: ビルドはAnsibleタスクで一時ディレクトリを使用して実行される
-    # ビルドコンテキストはサーバー上に残らない
-    container_name: "{{ container_names.postgres | mandatory('container_names.postgres must be set in inventory') }}"
-    entrypoint: ["/app/scripts/postgres-entrypoint.sh"]
-    environment:
-      POSTGRES_DB: "{{ database_name | mandatory('database_name must be set in inventory') }}"
-      POSTGRES_USER: "{{ database_user | mandatory('database_user must be set in inventory') }}"
-      # パスワードはコンテナ内でFernetから取得（secrets.yaml.encryptedから復号化）
-    # ports:  # 削除（内部ネットワークのみでアクセス可能）
-    #   - "5432:5432"
-    volumes:
-      - {{ docker_volume_postgres_data | mandatory('docker_volume_postgres_data must be set in inventory') }}:/var/lib/postgresql/data
-      - ./conf/backend/scripts/postgres-entrypoint.sh:/app/scripts/postgres-entrypoint.sh:ro
-      - ./conf/backend/config:/app/config:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U {{ database_user | mandatory('database_user must be set in inventory') }} -d {{ database_name | mandatory('database_name must be set in inventory') }}"]
-      interval: "{{ health_check.postgres.interval | mandatory('health_check.postgres.interval must be set in inventory') }}"
-      timeout: "{{ health_check.postgres.timeout | mandatory('health_check.postgres.timeout must be set in inventory') }}"
-      retries: {{ health_check.postgres.retries | mandatory('health_check.postgres.retries must be set in inventory') }}
-    restart: unless-stopped
-    networks:
-      - {{ docker_network_name | mandatory('docker_network_name must be set in inventory') }}
+  # TODO: postgres と nginx はまだマルチレポ化の移植が完了していないため、一時的にコメントアウト
+  # postgres:
+  #   image: "{{ image_names.postgres | mandatory('image_names.postgres must be set in inventory') }}"
+  #   # 注意: ビルドはAnsibleタスクで一時ディレクトリを使用して実行される
+  #   # ビルドコンテキストはサーバー上に残らない
+  #   container_name: "{{ container_names.postgres | mandatory('container_names.postgres must be set in inventory') }}"
+  #   entrypoint: ["/app/scripts/postgres-entrypoint.sh"]
+  #   environment:
+  #     POSTGRES_DB: "{{ database_name | mandatory('database_name must be set in inventory') }}"
+  #     POSTGRES_USER: "{{ database_user | mandatory('database_user must be set in inventory') }}"
+  #     # パスワードはコンテナ内でFernetから取得（secrets.yaml.encryptedから復号化）
+  #   # ports:  # 削除（内部ネットワークのみでアクセス可能）
+  #   #   - "5432:5432"
+  #   volumes:
+  #     - {{ docker_volume_postgres_data | mandatory('docker_volume_postgres_data must be set in inventory') }}:/var/lib/postgresql/data
+  #     - ./conf/backend/scripts/postgres-entrypoint.sh:/app/scripts/postgres-entrypoint.sh:ro
+  #     - ./conf/backend/config:/app/config:ro
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U {{ database_user | mandatory('database_user must be set in inventory') }} -d {{ database_name | mandatory('database_name must be set in inventory') }}"]
+  #     interval: "{{ health_check.postgres.interval | mandatory('health_check.postgres.interval must be set in inventory') }}"
+  #     timeout: "{{ health_check.postgres.timeout | mandatory('health_check.postgres.timeout must be set in inventory') }}"
+  #     retries: {{ health_check.postgres.retries | mandatory('health_check.postgres.retries must be set in inventory') }}
+  #   restart: unless-stopped
+  #   networks:
+  #     - {{ docker_network_name | mandatory('docker_network_name must be set in inventory') }}
 
   backend:
     image: "{{ image_names.backend | mandatory('image_names.backend must be set in inventory') }}:{{ backend_image_tag | mandatory('backend_image_tag must be provided via extra-vars or a variable source') }}"
@@ -30,9 +31,10 @@ services:
     # ビルドコンテキストはサーバー上に残らない
     container_name: "{{ container_names.backend | mandatory('container_names.backend must be set in inventory') }}"
     # 環境変数は使用しない。設定ファイル（config.yaml, secrets.yaml.encrypted）で管理
-    depends_on:
-      postgres:
-        condition: service_healthy
+    # TODO: postgres がコメントアウトされているため、depends_on も一時的に無効化
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
     volumes:
       - ./conf/backend/config:/app/config:ro
       - ./logs/backend:/app/logs:rw
@@ -45,35 +47,37 @@ services:
   # ビルド専用のため、podman/docker単体でビルド・実行する
   # ビルド済みファイルは ./dist/frontend に出力され、nginxコンテナでボリュームマウントされる
 
-  nginx:
-    image: "{{ image_names.nginx | mandatory('image_names.nginx must be set in inventory') }}"
-    # 注意: ビルドはAnsibleタスクで一時ディレクトリを使用して実行される
-    # ビルドコンテキストはサーバー上に残らない
-    container_name: "{{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }}"
-    ports:
-      - "{{ nginx_http_external_port | mandatory('nginx_http_external_port must be set in inventory') }}:80"
-{% if ssl_enabled | mandatory('ssl_enabled must be set in inventory') %}
-      - "{{ nginx_https_external_port | mandatory('nginx_https_external_port must be set in inventory') }}:443"
-{% endif %}
-    depends_on:
-      backend:
-        condition: service_started
-    volumes:
-      - ./dist/frontend:/usr/share/nginx/html:ro
-      - ./conf/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./conf/nginx/entrypoint.sh:/entrypoint.sh:ro
-      - ./logs/nginx:/var/log/nginx:rw
-{% if ssl_enabled %}
-      - /etc/letsencrypt/live/{{ domain_name }}:/etc/letsencrypt/live/{{ domain_name }}:ro
-      - /etc/letsencrypt/archive/{{ domain_name }}:/etc/letsencrypt/archive/{{ domain_name }}:ro
-{% endif %}
-    restart: unless-stopped
-    networks:
-      - {{ docker_network_name | mandatory('docker_network_name must be set in inventory') }}
+  # TODO: nginx はまだマルチレポ化の移植が完了していないため、一時的にコメントアウト
+  # nginx:
+  #   image: "{{ image_names.nginx | mandatory('image_names.nginx must be set in inventory') }}"
+  #   # 注意: ビルドはAnsibleタスクで一時ディレクトリを使用して実行される
+  #   # ビルドコンテキストはサーバー上に残らない
+  #   container_name: "{{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }}"
+  #   ports:
+  #     - "{{ nginx_http_external_port | mandatory('nginx_http_external_port must be set in inventory') }}:80"
+  # {% if ssl_enabled | mandatory('ssl_enabled must be set in inventory') %}
+  #     - "{{ nginx_https_external_port | mandatory('nginx_https_external_port must be set in inventory') }}:443"
+  # {% endif %}
+  #   depends_on:
+  #     backend:
+  #       condition: service_started
+  #   volumes:
+  #     - ./dist/frontend:/usr/share/nginx/html:ro
+  #     - ./conf/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./conf/nginx/entrypoint.sh:/entrypoint.sh:ro
+  #     - ./logs/nginx:/var/log/nginx:rw
+  # {% if ssl_enabled %}
+  #     - /etc/letsencrypt/live/{{ domain_name }}:/etc/letsencrypt/live/{{ domain_name }}:ro
+  #     - /etc/letsencrypt/archive/{{ domain_name }}:/etc/letsencrypt/archive/{{ domain_name }}:ro
+  # {% endif %}
+  #   restart: unless-stopped
+  #   networks:
+  #     - {{ docker_network_name | mandatory('docker_network_name must be set in inventory') }}
 
 networks:
   {{ docker_network_name | mandatory('docker_network_name must be set in inventory') }}:
     driver: bridge
 
-volumes:
-  {{ docker_volume_postgres_data | mandatory('docker_volume_postgres_data must be set in inventory') }}:
+# TODO: postgres がコメントアウトされているため、volumes 定義も一時的にコメントアウト
+# volumes:
+#   {{ docker_volume_postgres_data | mandatory('docker_volume_postgres_data must be set in inventory') }}:
