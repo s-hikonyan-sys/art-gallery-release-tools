@@ -66,10 +66,9 @@
 
 - name: Deploy backend application code from GitHub
   ansible.builtin.git:
-    repo: "https://{{ github_token }}@github.com/{{ github_owner }}/{{ service_repo_names.backend }}.git"
+    repo: "https://{{ github_token_backend }}@github.com/{{ github_owner }}/{{ service_repo_names.backend }}.git"
     dest: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}"
     version: "{{ backend_ref | mandatory('backend_ref must be provided') }}"
-    accept_hostkey: yes
     force: yes
   become: yes
   tags:
