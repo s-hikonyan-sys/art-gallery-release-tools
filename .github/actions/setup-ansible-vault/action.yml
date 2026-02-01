@@ -30,7 +30,7 @@ runs:
         PROD_DB_PASSWORD_PLAINTEXT: ${{ inputs.db_password_plaintext }}
         PROD_SECRET_KEY_PLAINTEXT: ${{ inputs.secret_key_plaintext }}
       run: |
-        mkdir -p ansible/vault
+        mkdir -p vault
         cat <<EOF > /tmp/vault-config.yaml
         secret_key: ${{ env.PROD_SECRET_KEY_PLAINTEXT }}
         database:
@@ -38,6 +38,6 @@ runs:
         EOF
         ansible-vault encrypt \
           --vault-password-file ansible/.vault_pass \
-          --output ansible/vault/vault-config.yaml.vault.${{ inputs.env_name }} \
+          --output vault/vault-config.yaml.vault.${{ inputs.env_name }} \
           /tmp/vault-config.yaml
         rm /tmp/vault-config.yaml
