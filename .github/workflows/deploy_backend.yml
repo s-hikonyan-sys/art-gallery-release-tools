@@ -151,6 +151,7 @@ jobs:
               "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
               "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
               "backend_ref": "${{ env.BACKEND_REF }}",
-              "backend_image_tag": "${{ env.BACKEND_IMAGE_TAG }}"
+              "backend_image_tag": "${{ env.BACKEND_IMAGE_TAG }}",
+              "github_token": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}"
             }' \
             --tags "$TAGS"
