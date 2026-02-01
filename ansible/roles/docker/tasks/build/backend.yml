@@ -38,7 +38,7 @@
 
 - name: Copy requirements.txt to internal directory for Docker build cache
   ansible.builtin.copy:
-    src: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}/requirements.txt"
+    src: "{{ playbook_dir }}/roles/backend/internal/requirements.txt"
     dest: "{{ backend_build_dir.path }}/internal/requirements.txt"
     mode: '0644'
   tags:
