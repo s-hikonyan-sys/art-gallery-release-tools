@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # secrets.py で使用する暗号化ライブラリをインストール
-RUN pip3 install --no-cache-dir cryptography pyyaml
+# externally-managed-environment エラーを回避するため、apt でインストール
+RUN apt-get update && apt-get install -y \
+    python3-cryptography \
+    python3-yaml \
+    && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 5432
