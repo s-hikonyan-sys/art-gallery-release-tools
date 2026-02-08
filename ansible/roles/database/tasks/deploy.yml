@@ -40,9 +40,9 @@
   when: secret_key | length == 0
   tags: [deploy-database-code]
 
-- name: Generate secrets.yaml.encrypted locally
+- name: Generate secrets.yaml.encrypted locally for database
   ansible.builtin.shell: |
-    python3 {{ playbook_dir }}/scripts/encrypt_secrets.py \
+    python3 {{ playbook_dir }}/scripts/encrypt_database_secrets.py \
       "{{ secrets_vault_file_path }}" \
       "{{ secret_key }}" \
       "/tmp/secrets.yaml.encrypted"
@@ -55,6 +55,15 @@
   ansible.builtin.copy:
     src: "/tmp/secrets.yaml.encrypted"
     dest: "{{ deployment_paths.conf_dir }}/backend/config/secrets.yaml.encrypted"
+    mode: '0600'
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+  tags: [deploy-database-code]
+
+- name: Copy secrets.py from database role files (Decoupled from backend src)
+  ansible.builtin.copy:
+    src: "secrets.py"  # 自身の roles/database/files/secrets.py を参照
+    dest: "{{ deployment_paths.conf_dir }}/database/files/secrets.py"
     mode: '0600'
     owner: "{{ app_user }}"
     group: "{{ app_user }}"
