@@ -10,6 +10,10 @@
           applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     user: postgres
+  register: result
+  until: result.rc == 0
+  retries: 10
+  delay: 5
   no_log: true
   tags: [database-migration]
 
@@ -44,4 +48,3 @@
   when: item.path | basename | replace('.sql', '') not in applied_migrations_raw.stdout_lines
   no_log: true
   tags: [database-migration]
-  
