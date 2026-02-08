@@ -60,10 +60,19 @@
     group: "{{ app_user }}"
   tags: [deploy-database-code]
 
+- name: Ensure database config directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.conf_dir }}/database/config"
+    state: directory
+    mode: '0700'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags: [deploy-database-code]
+  
 - name: Copy secrets.py from database role files (Decoupled from backend src)
   ansible.builtin.copy:
     src: "secrets.py"  # 自身の roles/database/files/secrets.py を参照
-    dest: "{{ deployment_paths.conf_dir }}/database/files/secrets.py"
+    dest: "{{ deployment_paths.conf_dir }}/database/config/secrets.py"
     mode: '0600'
     owner: "{{ app_user }}"
     group: "{{ app_user }}"
