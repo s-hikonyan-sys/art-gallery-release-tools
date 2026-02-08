@@ -10,12 +10,12 @@
     - name: Deploy docker-compose.yml
       ansible.builtin.include_role: { name: docker, tasks_from: deploy_compose }
       tags: [docker, deploy-compose]
+    - name: Update PostgreSQL image
+      ansible.builtin.include_role: { name: docker, tasks_from: container/update/update_postgres_image }
+      tags: [docker, update-postgres-image]
     - name: Deploy database code
       ansible.builtin.include_role: { name: database }
       tags: [deploy-database-code]
     - name: Run database migrations
       ansible.builtin.include_role: { name: database, tasks_from: migrate }
       tags: [database-migration]
-    - name: Update PostgreSQL image
-      ansible.builtin.include_role: { name: docker, tasks_from: container/update/update_postgres_image }
-      tags: [docker, update-postgres-image]
