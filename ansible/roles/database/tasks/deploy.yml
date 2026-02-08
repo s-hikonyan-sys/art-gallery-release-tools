@@ -9,6 +9,78 @@
   tags:    
     - deploy-database-code
 
+- name: Read secret_key for config.yaml from vault file
+  ansible.builtin.shell: |
+    ansible-vault decrypt --output - --vault-password-file {{ playbook_dir }}/.vault_pass "{{ secrets_vault_file_path }}" | python3 -c "
+    import sys
+    import yaml
+    data = yaml.safe_load(sys.stdin) or {}
+    secret_key_from_vault = data.get('secret_key', '')
+    if secret_key_from_vault:
+        print(secret_key_from_vault)
+    else:
+        print('', file=sys.stderr)
+        sys.exit(1)
+    "
+  register: vault_secret_key_result_for_db_config
+  changed_when: false
+  delegate_to: localhost
+  become: no
+  run_once: true
+  tags: [deploy-database-code]
+
+- name: Set secret_key fact for database config.yaml
+  ansible.builtin.set_fact:
+    secret_key: "{{ vault_secret_key_result_for_db_config.stdout | trim }}"
+  tags: [deploy-database-code]
+
+- name: Fail if secret_key is missing for database config.yaml
+  ansible.builtin.fail:
+    msg: "vault-config.yaml.vault.*にsecret_keyが設定されていません (データベースconfig.yaml用)"
+  when: secret_key | length == 0
+  tags: [deploy-database-code]
+
+- name: Generate secrets.yaml.encrypted locally
+  ansible.builtin.shell: |
+    python3 {{ playbook_dir }}/scripts/encrypt_secrets.py \
+      "{{ secrets_vault_file_path }}" \
+      "{{ secret_key }}" \
+      "/tmp/secrets.yaml.encrypted"
+  changed_when: true
+  delegate_to: localhost
+  become: no
+  tags: [deploy-database-code]
+
+- name: Copy secrets.yaml.encrypted to remote server
+  ansible.builtin.copy:
+    src: "/tmp/secrets.yaml.encrypted"
+    dest: "{{ deployment_paths.conf_dir }}/backend/config/secrets.yaml.encrypted"
+    mode: '0600'
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+  tags: [deploy-database-code]
+
+- name: Ensure database config directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.conf_dir }}/backend/config" # /opt/art-gallery/conf/backend/config を指す
+    state: directory
+    mode: '0700'
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+  tags:
+    - deploy-database-code
+
+- name: Create config.yaml for database entrypoint from template
+  ansible.builtin.template:
+    src: ../../backend/templates/config.yaml.j2 # roles/backend/templates/config.yaml.j2 を使う
+    dest: "{{ deployment_paths.conf_dir }}/backend/config/config.yaml"
+    mode: '0600'
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+  vars: # ここで secret_key を渡す
+    secret_key: "{{ secret_key }}"
+  tags: [deploy-database-code]
+
 - name: Deploy postgres-entrypoint.sh and migrations from GitHub  
   ansible.builtin.git:    
     repo: "https://{{ github_token_database }}@github.com/{{ github_owner }}/{{ service_repo_names.postgres }}.git"    
