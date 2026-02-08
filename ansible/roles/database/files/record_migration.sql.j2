@@ -1,0 +1,6 @@
+-- マイグレーション実行の記録
+INSERT INTO schema_migrations 
+    (version, description, postgres_version, postgres_image_tag, postgres_base_image, applied_by, execution_time_ms)
+VALUES 
+    ('{{ migration_version }}', '{{ migration_description }}', '{{ postgres_server_version }}', '{{ postgres_image_tag }}', 'postgres:{{ base_image_versions.postgres }}', '{{ ansible_user_id }}', {{ migration_execution_time_ms | default(0) }})
+ON CONFLICT (version) DO NOTHING;

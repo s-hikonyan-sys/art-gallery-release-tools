@@ -1,0 +1,41 @@
+name: Build Database Image
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'ビルドするイメージのタグ (例: v1.0.0)'
+        required: false
+        type: string
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - name: Set Context
+        run: |
+          VERSION="${{ github.event.inputs.release_version || vars.RELEASE_VERSION }}"
+          echo "POSTGRES_IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
+          GITHUB_OWNER=$(yq '.github_owner' ansible/group_vars/all.yml)
+          GHCR_BASE_REGISTRY=$(yq '.ghcr_base_registry' ansible/group_vars/all.yml)
+          POSTGRES_REPO_NAME=$(yq '.service_repo_names.postgres' ansible/group_vars/all.yml)
+          echo "POSTGRES_IMAGE_NAME=${GHCR_BASE_REGISTRY}/${GITHUB_OWNER}/${POSTGRES_REPO_NAME}" >> $GITHUB_ENV
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push
+        run: |
+          cd ansible
+          ansible-playbook playbook_build_database.yml \
+            --inventory inventory/ci.yml \
+            --extra-vars '{"target_hosts":"ci-server", "postgres_image_tag":"${{ env.POSTGRES_IMAGE_TAG }}"}' \
+            --tags "build-database"
+          docker push ${{ env.POSTGRES_IMAGE_NAME }}:${{ env.POSTGRES_IMAGE_TAG }}

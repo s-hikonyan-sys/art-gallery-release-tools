@@ -1,0 +1,9 @@
+---
+- name: Start postgres container
+  ansible.builtin.shell: |
+    cd {{ deployment_dir }}
+    docker compose up -d postgres
+  become: no
+  tags:
+    - docker
+    - start-postgres

@@ -1,0 +1,42 @@
+---
+- name: Ensure database scripts directory exists  
+  ansible.builtin.file:    
+    path: "{{ deployment_paths.deployment_dir }}/scripts"    
+    state: directory    
+    mode: '0755'    
+    owner: "{{ app_user }}"    
+    group: "{{ app_user }}"
+  tags:    
+    - deploy-database-code
+
+- name: Deploy postgres-entrypoint.sh and migrations from GitHub  
+  ansible.builtin.git:    
+    repo: "https://{{ github_token_database }}@github.com/{{ github_owner }}/{{ service_repo_names.postgres }}.git"    
+    dest: "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}"    
+    version: "{{ database_ref | mandatory('database_ref must be provided') }}"    
+    force: yes  
+  become: yes  
+  tags:    
+    - deploy-database-code
+
+- name: Copy postgres-entrypoint.sh to deployment directory  
+  ansible.builtin.copy:    
+    src: "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}/scripts/postgres-entrypoint.sh"    
+    dest: "{{ deployment_paths.deployment_dir }}/scripts/postgres-entrypoint.sh"    
+    mode: '0755'    
+    owner: "{{ app_user }}"    
+    group: "{{ app_user }}"    
+    remote_src: yes  
+  tags:    
+    - deploy-database-code
+
+- name: Copy secrets.py from backend repository  
+  ansible.builtin.copy:    
+    src: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}/config/secrets.py"    
+    dest: "{{ deployment_paths.conf_dir }}/backend/config/secrets.py"    
+    mode: '0600'    
+    owner: "{{ app_user }}"    
+    group: "{{ app_user }}"    
+    remote_src: yes  
+  tags:    
+    - deploy-database-code

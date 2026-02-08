@@ -1,0 +1,21 @@
+---
+- name: Deploy Database
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become }}"
+  pre_tasks:
+    - name: Setup vault configuration
+      ansible.builtin.import_tasks: tasks/setup-vault.yml
+      tags: [always]
+  tasks:
+    - name: Deploy docker-compose.yml
+      ansible.builtin.include_role: { name: docker, tasks_from: deploy_compose }
+      tags: [docker, deploy-compose]
+    - name: Deploy database code
+      ansible.builtin.include_role: { name: database }
+      tags: [deploy-database-code]
+    - name: Run database migrations
+      ansible.builtin.include_role: { name: database, tasks_from: migrate }
+      tags: [database-migration]
+    - name: Update PostgreSQL image
+      ansible.builtin.include_role: { name: docker, tasks_from: container/update/update_postgres_image }
+      tags: [docker, update-postgres-image]

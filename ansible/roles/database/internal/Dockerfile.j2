@@ -1,0 +1,17 @@
+---
+# PostgreSQL コンテナイメージのビルド
+# 公式イメージをベースに、必要なツール（psql client等）を追加
+
+FROM postgres:{{ base_image_versions.postgres }}
+
+# PostgreSQL クライアントツールと Python（entrypoint スクリプト用）をインストール
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# secrets.py で使用する暗号化ライブラリをインストール
+RUN pip3 install --no-cache-dir cryptography pyyaml
+
+EXPOSE 5432

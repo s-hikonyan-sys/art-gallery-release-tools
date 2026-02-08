@@ -1,0 +1,8 @@
+---
+- name: Stop postgres container
+  ansible.builtin.shell: |
+    cd {{ deployment_dir }}
+    docker compose stop postgres
+  tags:
+    - docker
+    - stop-postgres

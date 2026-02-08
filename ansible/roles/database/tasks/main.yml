@@ -1,0 +1,26 @@
+---
+- name: Load vault variables  
+  ansible.builtin.include_vars:    
+    file: "{{ secrets_vault_file_path }}"
+  no_log: true  
+  tags:    
+    - deploy-database-code
+    - database-migration
+
+- name: Set database password fact
+  ansible.builtin.set_fact:    
+    db_password: "{{ database['password'] }}"
+  no_log: true  
+  tags:    
+    - deploy-database-code
+    - database-migration
+
+- name: Include deploy tasks  
+  ansible.builtin.include_tasks: deploy.yml  
+  tags:    
+    - deploy-database-code
+
+- name: Include migration tasks  
+  ansible.builtin.include_tasks: migrate.yml  
+  tags:    
+    - database-migration

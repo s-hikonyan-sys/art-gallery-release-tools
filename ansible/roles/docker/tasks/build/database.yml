@@ -1,0 +1,24 @@
+---
+- name: Create temporary build directory for database  
+  ansible.builtin.tempfile: { state: directory, suffix: database-build }
+  register: database_build_dir
+  tags: [docker, build-database]
+
+- name: Copy database Dockerfile
+  ansible.builtin.template:    
+    src: "{{ playbook_dir }}/roles/database/internal/Dockerfile.j2"
+    dest: "{{ database_build_dir.path }}/Dockerfile"
+  tags: [docker, build-database]
+
+- name: Build PostgreSQL container image
+  community.docker.docker_image:    
+    name: "{{ image_names.postgres }}"
+    tag: "{{ postgres_image_tag }}"
+    build: { path: "{{ database_build_dir.path }}", pull: yes }
+    source: build
+    state: present
+  tags: [docker, build-database]
+
+- name: Remove temporary build directory
+  ansible.builtin.file: { path: "{{ database_build_dir.path }}", state: absent }
+  tags: [docker, build-database]

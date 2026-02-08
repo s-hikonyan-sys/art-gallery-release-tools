@@ -1,0 +1,59 @@
+name: Deploy Database
+on:
+  workflow_dispatch:
+    inputs:
+      run_deploy_image:
+        description: '1. イメージを更新 (Pull & Restart)'
+        required: false
+        type: boolean
+        default: false
+      run_deploy_migrations:
+        description: '2. マイグレーションを実行'
+        required: false
+        type: boolean
+        default: false
+      release_version:
+        description: 'デプロイ対象タグ (例: v1.0.0)'
+        required: false
+        type: string
+      database_ref:
+        description: 'database リポジトリの ref'
+        required: false
+        default: 'main'
+        type: string
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Ansible Vault
+        uses: ./.github/actions/setup-ansible-vault
+        with:
+          ansible_vault_password: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+          env_name: prod
+          db_password_plaintext: ${{ secrets.PROD_DB_PASSWORD_PLAINTEXT }}
+          secret_key_plaintext: ${{ secrets.PROD_SECRET_KEY_PLAINTEXT }}
+      - name: Deploy
+        run: |
+          TAGS=""
+          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
+            TAGS="deploy-compose,update-postgres-image"
+          fi
+          if [ "${{ github.event.inputs.run_deploy_migrations }}" == "true" ]; then
+            [ -n "$TAGS" ] && TAGS="$TAGS,"
+            TAGS="${TAGS}deploy-database-code,database-migration"
+          fi
+          cd ansible
+          ansible-playbook playbook_deploy_database.yml \
+            --inventory inventory/production.yml \
+            --vault-password-file .vault_pass \
+            --extra-vars '{
+              "target_hosts": "production",
+              "prod_host": "${{ vars.PROD_HOST }}",
+              "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
+              "database_ref": "${{ github.event.inputs.database_ref }}",
+              "postgres_image_tag": "${{ github.event.inputs.release_version || vars.RELEASE_VERSION }}",
+              "github_token_database": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_DATABASE }}"
+            }' \
+            --tags "$TAGS"

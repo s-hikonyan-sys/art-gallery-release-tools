@@ -6,17 +6,33 @@ app_name: "art-gallery"
 
 # 各サービスのリポジトリ名・イメージ名の一元管理
 service_repo_names:
-  postgres: "art-gallery-postgres"
+  postgres: "art-gallery-database"
   backend: "art-gallery-backend"
   nginx: "art-gallery-nginx"
   frontend: "art-gallery-frontend"
+
+# Dockerイメージのベースバージョン管理
+base_image_versions:
+  python: "3.11-slim"
+  postgres: "17"
+  node: "18-alpine"
+  nginx: "1.25-alpine"
+
+# Database接続設定
+database_host: "localhost"
+database_port: 5432
+
+# Database マイグレーションのバージョン管理
+database_migration:
+  target_version: "{{ database_target_version | mandatory('database_target_version must be provided') }}"
+  history_table: "schema_migrations"
+  migrations_base_path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}/migrations"
 
 # GitHub & GHCR 設定
 github_owner: "s-hikonyan-sys"
 ghcr_base_registry: "ghcr.io"
 
 # デプロイ関連ディレクトリ設定
-# 注意: 各インベントリファイルで deployment_dir の定義が必須です
 deployment_paths:
   deployment_dir: "{{ deployment_dir }}"
   src_dir: "{{ deployment_paths.deployment_dir }}/src"
@@ -31,15 +47,13 @@ vault_config:
     production: "{{ playbook_dir }}/../vault/vault-config.yaml.vault.prod"
     dev: "{{ playbook_dir }}/../vault/vault-config.yaml.vault.dev"
 
-# コンテナ・イメージ名の命名規則（app_name から導出）
-# image_namesは各インベントリファイルで定義されます
+# コンテナ・イメージ名の命名規則
 container_names:
   postgres: "{{ app_name }}-db"
   backend: "{{ app_name }}-api"
   nginx: "{{ app_name }}-nginx"
 
-# URL設定（インベントリの domain_name と ssl_enabled から自動導出）
-# 注意: 各インベントリで ssl_enabled と domain_name の定義が必須です
+# URL設定
 frontend_url: "{{ 'https' if ssl_enabled else 'http' }}://{{ domain_name }}"
 vite_api_base_url: "{{ frontend_url }}/api"
 
@@ -49,10 +63,10 @@ docker_network_name: "{{ app_name }}-network"
 # Dockerボリューム名
 docker_volume_postgres_data: "{{ app_name }}_postgres_data"
 
-# コンテナフィルター名（docker psフィルター用）
+# コンテナフィルター名
 container_filter_name: "{{ app_name }}"
 
-# ヘルスチェック等の共通設定（全環境で固定）
+# ヘルスチェック等の共通設定
 health_check:
   backend_path: "/api/health"
   postgres:
