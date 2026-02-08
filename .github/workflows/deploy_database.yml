@@ -65,4 +65,4 @@ jobs:
               "postgres_image_tag": "${{ github.event.inputs.release_version || vars.RELEASE_VERSION }}",
               "github_token_database": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_DATABASE }}"
             }' \
-            --tags "$TAGS"
+            --tags "$TAGS" -vvv
