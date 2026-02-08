@@ -1,86 +1,47 @@
 ---
-- name: Ensure migration history table exists  
-  community.postgresql.postgresql_query:    
-    login_host: "{{ database_host }}"
-    login_port: "{{ database_port }}"
-    login_user: "{{ database_user }}"
-    login_password: "{{ db_password }}"
-    db: "{{ database_name }}"
-    query: "{{ lookup('file', 'roles/database/files/create_migration_history_table.sql') }}"
-  delegate_to: localhost
-  no_log: true  
-  tags:    
-    - database-migration
-
-- name: Get PostgreSQL version information  
-  community.postgresql.postgresql_query:    
-    login_host: "{{ database_host }}"
-    login_user: "{{ database_user }}"
-    login_password: "{{ db_password }}"
-    db: "{{ database_name }}"
-    query: "SELECT version();"
-  register: postgres_version_info
-  delegate_to: localhost
+- name: Ensure migration history table exists
+  community.docker.docker_container_exec:
+    container: art-gallery-db
+    command: psql -h localhost -U {{ database_user }} -d {{ database_name }} -W
+    stdin: |
+      {{ db_password }}
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+          version VARCHAR(255) PRIMARY KEY,
+          applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    user: postgres
   no_log: true
-  tags:    
-    - database-migration
+  tags: [database-migration]
 
-- name: Set PostgreSQL version facts  
-  ansible.builtin.set_fact:    
-    postgres_server_version: "{{ postgres_version_info.query_result[0].version | regex_search('PostgreSQL ([0-9.]+)', '\\1') | first }}"
-  tags:    
-    - database-migration
+- name: Get applied migrations
+  community.docker.docker_container_exec:
+    container: art-gallery-db
+    command: psql -h localhost -U {{ database_user }} -d {{ database_name }} -W -t -A -c "SELECT version FROM schema_migrations;"
+    stdin: "{{ db_password }}"
+    user: postgres
+  register: applied_migrations_raw
+  no_log: true
+  tags: [database-migration]
 
-- name: Find migration files for target version  
-  ansible.builtin.find:    
+- name: Find migration files
+  ansible.builtin.find:
     paths: "{{ database_migration.migrations_base_path }}/v{{ database_migration.target_version }}"
     patterns: "*.sql"
   register: migration_files
-  tags:    
-    - database-migration
-
-- name: Get applied migrations  
-  community.postgresql.postgresql_query:    
-    login_host: "{{ database_host }}"
-    login_user: "{{ database_user }}"
-    login_password: "{{ db_password }}"
-    db: "{{ database_name }}"
-    query: "SELECT version FROM schema_migrations;"
-  register: applied_migrations
   delegate_to: localhost
-  no_log: true
-  tags:    
-    - database-migration
+  tags: [database-migration]
 
-- name: Apply pending migrations with timing  
-  community.postgresql.postgresql_query:    
-    login_host: "{{ database_host }}"
-    login_user: "{{ database_user }}"
-    login_password: "{{ db_password }}"
-    db: "{{ database_name }}"
-    query: "{{ lookup('file', item.path) }}"
+- name: Apply pending migrations
+  community.docker.docker_container_exec:
+    container: art-gallery-db
+    command: psql -h localhost -U {{ database_user }} -d {{ database_name }} -W
+    stdin: |
+      {{ db_password }}
+      {{ lookup('file', item.path) }}
+      INSERT INTO schema_migrations (version) VALUES ('{{ item.path | basename | replace('.sql', '') }}') ON CONFLICT DO NOTHING;
+    user: postgres
   loop: "{{ migration_files.files | sort(attribute='path') }}"
-  when: item.path | basename | replace('.sql', '') not in (applied_migrations.query_result | map(attribute='version') | list)
-  register: migration_execution_results
-  delegate_to: localhost
+  when: item.path | basename | replace('.sql', '') not in applied_migrations_raw.stdout_lines
   no_log: true
-  tags:    
-    - database-migration
-
-- name: Record applied migrations with version info  
-  community.postgresql.postgresql_query:    
-    login_host: "{{ database_host }}"
-    login_user: "{{ database_user }}"
-    login_password: "{{ db_password }}"
-    db: "{{ database_name }}"
-    query: "{{ lookup('template', 'roles/database/files/record_migration.sql.j2') }}"
-  vars:    
-    migration_version: "{{ item.item.path | basename | replace('.sql', '') }}"
-    migration_description: "Migration for v{{ database_migration.target_version }}"
-    migration_execution_time_ms: "{{ (item.end | default(item.start) | float - item.start | float) * 1000 | int }}"
-  loop: "{{ migration_execution_results.results }}"
-  when: item.changed
-  delegate_to: localhost
-  no_log: true
-  tags:    
-    - database-migration
+  tags: [database-migration]
+  
