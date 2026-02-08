@@ -11,7 +11,7 @@
       );
     user: postgres
   register: result
-  until: result.rc == 0
+  until: result is success
   retries: 10
   delay: 5
   no_log: true
