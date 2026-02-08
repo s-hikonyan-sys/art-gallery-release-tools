@@ -13,7 +13,7 @@ services:
       - {{ docker_volume_postgres_data | mandatory('docker_volume_postgres_data must be set in inventory') }}:/var/lib/postgresql/data
       - ./scripts/postgres-entrypoint.sh:/app/scripts/postgres-entrypoint.sh:ro
       - ./conf/backend/config:/app/config:ro
-      - ./conf/database/config/secrets.py:/app/config/secrets.py:rw
+      - ./conf/database/config:/app/config:rw
       - ./src/{{ service_repo_names.postgres }}/migrations:/app/migrations:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U {{ database_user | mandatory('database_user must be set in inventory') }} -d {{ database_name | mandatory('database_name must be set in inventory') }}"]
