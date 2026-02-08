@@ -41,6 +41,11 @@ jobs:
           chmod 600 ~/.ssh/ansible_deploy_key
           echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+      - name: Install PostgreSQL dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-psycopg2
+          ansible-galaxy collection install community.postgresql --force
       - name: Deploy
         run: |
           TAGS=""
