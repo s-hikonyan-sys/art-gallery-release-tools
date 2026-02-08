@@ -34,6 +34,13 @@ jobs:
           env_name: prod
           db_password_plaintext: ${{ secrets.PROD_DB_PASSWORD_PLAINTEXT }}
           secret_key_plaintext: ${{ secrets.PROD_SECRET_KEY_PLAINTEXT }}
+      - name: Setup SSH for Production Deployment
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_deploy_key
+          chmod 600 ~/.ssh/ansible_deploy_key
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
       - name: Deploy
         run: |
           TAGS=""
@@ -52,6 +59,7 @@ jobs:
               "target_hosts": "production",
               "prod_host": "${{ vars.PROD_HOST }}",
               "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
+              "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
               "database_ref": "${{ github.event.inputs.database_ref }}",
               "postgres_image_tag": "${{ github.event.inputs.release_version || vars.RELEASE_VERSION }}",
               "github_token_database": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_DATABASE }}"
