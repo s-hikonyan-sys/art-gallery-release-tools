@@ -1,7 +1,6 @@
 # アプリケーション設定ファイル（Ansibleテンプレート）
 # このファイルは環境ごとに異なる値が設定されます
 # セキュリティ上問題のない設定項目のみを記述します
-# 機密情報は secrets.yaml.encrypted で管理します
 
 # サーバー設定
 server:
@@ -19,9 +18,9 @@ database:
   port: {{ database_port | mandatory('database_port must be set in inventory') }}
   name: {{ database_name | mandatory('database_name must be set in inventory') }}
   user: {{ database_user | mandatory('database_user must be set in inventory') }}
-  # password は secrets.yaml.encrypted で管理
+  # password は 復号API から取得します
 
-# 暗号化キー（Fernetで使用）
-# vault-config.yaml.vault.*から取得されます
-secret_key: "{{ secret_key }}"
+# 復号API設定
+secrets_api:
+  url: "{{ secrets_api_url }}"
 

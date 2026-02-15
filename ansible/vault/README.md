@@ -74,12 +74,17 @@ ansible-vault edit vault/vault-config.yaml.vault.prod --vault-password-file .vau
 - ファイル権限は `0600`（所有者のみ読み書き可）に厳格に制限されます。
 
 ### 4. アプリケーション実行時の復号
+- **Secrets API コンテナ起動時**:
+    - `art-gallery-secrets-api` コンテナが起動し、`Config` クラスを通じて `secrets.yaml.encrypted` を復号してメモリ内に保持します。
 - **PostgreSQL 起動時**: 
-    - `postgres-entrypoint.sh` が `secrets.py` を呼び出して `secrets.yaml.encrypted` を復号します。
-    - 復号されたパスワードを `POSTGRES_PASSWORD` 環境変数としてセットし、DBを起動します。
-- **Backend アプリ接続時**: 
-    - `SecretManager` が起動時にファイルを読み込み、メモリ内で復号してデータベース接続に使用します。
+    - `postgres-entrypoint.sh` が起動し、`secrets-api` のエンドポイント（`/secrets/database/password`）にリクエストを送ります。
+    - 取得したパスワードを `POSTGRES_PASSWORD` 環境変数にセットして DB を開始します。
+- **Backend アプリ起動時**: 
+    - `config/__init__.py` の初期化プロセスで `secrets-api` にリクエストを送り、データベースパスワードを取得します。
     - 平文パスワードがディスク上に永続化されることはありません。
+- **セキュリティの最大化**:
+    - `secrets-api` はレスポンスを返した直後に、認証用トークンファイル（`auth_token.txt`）を自ら削除し、以後の不正リクエストを遮断します。
+
 
 ## セキュリティ注意事項
 

@@ -10,6 +10,7 @@ service_repo_names:
   backend: "art-gallery-backend"
   nginx: "art-gallery-nginx"
   frontend: "art-gallery-frontend"
+  secrets: "art-gallery-secrets"
 
 # Dockerイメージのベースバージョン管理
 base_image_versions:
@@ -52,6 +53,7 @@ container_names:
   postgres: "{{ app_name }}-db"
   backend: "{{ app_name }}-api"
   nginx: "{{ app_name }}-nginx"
+  secrets: "{{ app_name }}-secrets-api"
 
 # URL設定
 frontend_url: "{{ 'https' if ssl_enabled else 'http' }}://{{ domain_name }}"
@@ -59,6 +61,8 @@ vite_api_base_url: "{{ frontend_url }}/api"
 
 # Dockerネットワーク名
 docker_network_name: "{{ app_name }}-network"
+
+secrets_api_url: "http://art-gallery-secrets-api:5000"
 
 # Dockerボリューム名
 docker_volume_postgres_data: "{{ app_name }}_postgres_data"

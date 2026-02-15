@@ -15,6 +15,16 @@
     - deploy-database-code
     - database-migration
 
+- name: Deploy secrets_api_config.sh for database entrypoint
+  ansible.builtin.template:
+    src: secrets_api_config.sh.j2
+    dest: "{{ deployment_paths.deployment_dir }}/scripts/secrets_api_config.sh"
+    mode: '0644'
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+  tags:
+    - deploy-database-code
+
 - name: Include deploy tasks  
   ansible.builtin.include_tasks: deploy.yml  
   tags:    

@@ -45,3 +45,4 @@ all:
             backend: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.backend }}"
             nginx: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.nginx }}"
             frontend: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.frontend }}"
+            secrets: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.secrets }}"

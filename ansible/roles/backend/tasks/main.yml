@@ -20,14 +20,6 @@
     - deploy-backend
     - deploy-all
 
-# Vault関連処理（暗号化ファイル生成）
-- name: Include vault tasks
-  ansible.builtin.include_tasks: vault.yml
-  tags:
-    - deploy
-    - deploy-backend
-    - deploy-all
-
 # 検証処理
 - name: Include verify tasks
   ansible.builtin.include_tasks: verify.yml

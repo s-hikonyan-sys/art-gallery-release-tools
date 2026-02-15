@@ -1,8 +1,28 @@
 services:
+  secrets-api:
+    image: "{{ image_names.secrets | mandatory('image_names.secrets must be set in inventory') }}:{{ secrets_version | mandatory('secrets_version must be provided via extra-vars or a variable source') }}"
+    container_name: "{{ container_names.secrets | mandatory('container_names.secrets must be set in inventory') }}"
+    volumes:
+      - ./conf/secrets/config:/app/config:ro
+      - ./logs/secrets:/app/logs:rw
+      - ./src/{{ service_repo_names.secrets }}:/app:ro
+      - ./conf/secrets/tokens:/app/tokens:rw
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - {{ docker_network_name | mandatory('docker_network_name must be set in inventory') }}
+
   postgres:
     image: "{{ image_names.postgres | mandatory('image_names.postgres must be set in inventory') }}:{{ postgres_image_tag | mandatory('postgres_image_tag must be provided via extra-vars') }}"
     container_name: "{{ container_names.postgres | mandatory('container_names.postgres must be set in inventory') }}"
     entrypoint: ["/app/scripts/postgres-entrypoint.sh"]
+    depends_on:
+      secrets-api:
+        condition: service_healthy
     environment:
       POSTGRES_DB: "{{ database_name | mandatory('database_name must be set in inventory') }}"
       POSTGRES_USER: "{{ database_user | mandatory('database_user must be set in inventory') }}"
@@ -12,9 +32,9 @@ services:
     volumes:
       - {{ docker_volume_postgres_data | mandatory('docker_volume_postgres_data must be set in inventory') }}:/var/lib/postgresql/data
       - ./scripts/postgres-entrypoint.sh:/app/scripts/postgres-entrypoint.sh:ro
-      - ./conf/backend/config:/app/config:ro
       - ./conf/database/config:/app/config:rw
       - ./src/{{ service_repo_names.postgres }}/migrations:/app/migrations:ro
+      - ./conf/secrets/tokens:/app/tokens:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U {{ database_user | mandatory('database_user must be set in inventory') }} -d {{ database_name | mandatory('database_name must be set in inventory') }}"]
       interval: "{{ health_check.postgres.interval | mandatory('health_check.postgres.interval must be set in inventory') }}"
@@ -33,10 +53,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      secrets-api:
+        condition: service_healthy
     volumes:
       - ./conf/backend/config:/app/config:ro
       - ./logs/backend:/app/logs:rw
       - ./src/{{ service_repo_names.backend }}:/app
+      - ./conf/secrets/tokens:/app/tokens:ro
     restart: unless-stopped
     networks:
       - {{ docker_network_name | mandatory('docker_network_name must be set in inventory') }}
