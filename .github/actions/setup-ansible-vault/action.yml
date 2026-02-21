@@ -41,3 +41,4 @@ runs:
           --output vault/vault-config.yaml.vault.${{ inputs.env_name }} \
           /tmp/vault-config.yaml
         rm /tmp/vault-config.yaml
+        echo "::set-output name=secrets_file_path::ansible/vault/vault-config.yaml.vault.${{ inputs.env_name }}"
