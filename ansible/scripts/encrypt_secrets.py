@@ -6,23 +6,21 @@ Fernetで暗号化してsecrets.yaml.encryptedを作成します。"""
 
 import sys
 from pathlib import Path
+import yaml
 
-# プロジェクトルートをパスに追加
+# Ansibleディレクトリ内からファイルを特定
 # __file__ = release-tools/ansible/scripts/encrypt_secrets.py
 # parent.parent.parent.parent = プロジェクトルート
-project_root = Path(__file__).parent.parent.parent.parent
-backend_path = project_root / "src" / "backend"
-sys.path.insert(0, str(backend_path))
-
-import yaml
+ansible_dir = Path(__file__).parent.parent
+db_secrets_path = ansible_dir / "roles" / "database" / "files" / "secrets.py"
 
 # SecretManagerをインポート
 # config/__init__.pyをインポートするとConfigクラスが実行時にconfig.yamlを読み込もうとするため、
-# config/secrets.pyを直接インポートする
+# データベースロール内に配置した secrets.py を直接インポートする
 import importlib.util
 spec = importlib.util.spec_from_file_location(
     "secrets",
-    backend_path / "config" / "secrets.py"
+    db_secrets_path
 )
 secrets_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(secrets_module)
