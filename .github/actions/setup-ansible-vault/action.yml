@@ -15,30 +15,41 @@ inputs:
     description: 'The plaintext secret key to be stored in the vault.'
     required: true
 
+outputs:
+  secrets_file_path:
+    description: 'The absolute path to the generated Ansible Vault file.'
+    value: ${{ steps.create_vault_file.outputs.secrets_file_path }}
+
 runs:
   using: "composite"
   steps:
     - name: Create Vault Password File
       shell: bash
       run: |
-        echo "${{ inputs.ansible_vault_password }}" > ansible/.vault_pass
-        chmod 600 ansible/.vault_pass
+        echo "${{ inputs.ansible_vault_password }}" > "${GITHUB_WORKSPACE}/ansible/.vault_pass"
+        chmod 600 "${GITHUB_WORKSPACE}/ansible/.vault_pass"
 
     - name: Create Ansible vault files for ${{ inputs.env_name }}
+      id: create_vault_file
       shell: bash
       env:
         PROD_DB_PASSWORD_PLAINTEXT: ${{ inputs.db_password_plaintext }}
         PROD_SECRET_KEY_PLAINTEXT: ${{ inputs.secret_key_plaintext }}
       run: |
-        mkdir -p vault
+        VAULT_DIR="${GITHUB_WORKSPACE}/ansible/vault"
+        mkdir -p "${VAULT_DIR}"
+        VAULT_FILE_PATH="${VAULT_DIR}/vault-config.yaml.vault.${{ inputs.env_name }}"
+        
         cat <<EOF > /tmp/vault-config.yaml
         secret_key: ${{ env.PROD_SECRET_KEY_PLAINTEXT }}
         database:
           password: ${{ env.PROD_DB_PASSWORD_PLAINTEXT }}
         EOF
+        
         ansible-vault encrypt \
-          --vault-password-file ansible/.vault_pass \
-          --output vault/vault-config.yaml.vault.${{ inputs.env_name }} \
+          --vault-password-file "${GITHUB_WORKSPACE}/ansible/.vault_pass" \
+          --output "${VAULT_FILE_PATH}" \
           /tmp/vault-config.yaml
+        
         rm /tmp/vault-config.yaml
-        echo "::set-output name=secrets_file_path::ansible/vault/vault-config.yaml.vault.${{ inputs.env_name }}"
+        echo "::set-output name=secrets_file_path::${VAULT_FILE_PATH}"
