@@ -10,26 +10,27 @@
 
 ## 重要なドキュメント
 
-- **[機密情報・暗号化運用ガイド](ansible/vault/README.md)**: 
-  Ansible Vault と Fernet 暗号化を組み合わせた多段パスワード管理フロー、および機密情報配布専用コンテナ（Secrets API）のライフサイクルについての詳細。デプロイ前に必ず一読してください。
+- **[機密情報・暗号化運用ガイド](ansible/vault/README.md)**: GitHub Secrets を活用した事前暗号化フロー、および機密情報配布専用コンテナ（Secrets API）のライフサイクルについての詳細。
 
 ## 特徴
 
-- **多段・使い捨ての機密情報管理 (Ephemeral Secrets)**: 
-  データベースパスワード等の配布を専用コンテナに分離しています。コンテナ起動時のワンタイムトークンを用いた認証を経て各サービスにパスワードを配布後、コンテナ自身が自動停止することでセキュリティリスクを最小化しています。
-- **イメージとコードの分離**: 
-  Docker イメージには実行環境（OS・ミドルウェア）のみを内包し、アプリケーションコードはデプロイ時にボリュームマウントで提供する設計を採用しています。
-- **完全手動デプロイ**: 
-  意図しない更新を防ぐため、すべてのデプロイ・ビルド処理は GitHub Actions の `workflow_dispatch` から手動で実行します。「イメージのみの更新」と「コードのみの反映」を独立してトリガー可能です。
-- **集中依存関係管理**: 
-  各アプリケーションの `Dockerfile` や `requirements.txt` などを本リポジトリで一元管理し、実行環境の整合性を保証します。
+- **事前暗号化シークレット (Pre-encrypted Secrets)**: 機密情報は事前に Fernet で暗号化され、GitHub Actions Secrets から直接デプロイされます。CI は暗号化済みの値をそのままファイルに書き出すだけのシンプルなフローを採用しています。
+- **Ephemeral Secrets（使い捨て機密情報配布）**: データベースパスワード等の配布を専用コンテナ（`art-gallery-secrets-api`）に分離しています。コンテナ起動時のワンタイムトークンを用いた認証を経て各サービスにパスワードを配布後、コンテナ自身が自動停止することでセキュリティリスクを最小化しています。
+- **イメージとコードの分離**: Docker イメージには実行環境（OS・ミドルウェア）のみを内包し、アプリケーションコードはデプロイ時にボリュームマウントで提供する設計を採用しています。
+- **完全手動デプロイ**: 意図しない更新を防ぐため、すべてのデプロイ・ビルド処理は GitHub Actions の `workflow_dispatch` から手動で実行します。「イメージのみの更新」と「コードのみの反映」を独立してトリガー可能です。
+- **集中依存関係管理**: 各アプリケーションの `Dockerfile` や `requirements.txt` などを本リポジトリで一元管理し、実行環境の整合性を保証します。
+
+## 機密情報のデプロイフロー
+
+1. **事前準備**: 管理者がローカルで `art-gallery-secrets` の `SecretManager` を用いてパスワードを Fernet 暗号化し、GitHub Secrets に `PROD_SECRET_KEY` と `PROD_DB_PASSWORD_ENCRYPTED` として登録します。
+2. **デプロイ**: GitHub Actions の `write-secrets-files` アクションが、Secrets の値をそのまま `secrets.yaml.encrypted` および `config.yaml` として出力し、Ansible がサーバーへ配置します。
+3. **実行時**: `secrets-api` コンテナが起動し、配布された暗号化ファイルを復号。各サービスへワンタイムトークン経由でパスワードを提供します。
 
 ## ディレクトリ構成
 
-- `.github/`: CI/CD ワークフローおよび Ansible Vault 動的生成用の共通カスタムアクション
+- `.github/`: CI/CD ワークフローおよびシークレット書き出し用のカスタムアクション（`write-secrets-files`）
 - `ansible/`: デプロイおよび構築用の Ansible Playbook 一式
   - `group_vars/`: 全環境共通の基幹変数定義
   - `inventory/`: 環境定義 (ci.yml, production.yml)
-  - `roles/`: 各サービスごとの構築・設定ロール（backend, database, docker, frontend, nginx, secrets）
-  - `scripts/`: 暗号化ブリッジ用 Python スクリプト
+  - `roles/`: 各サービスごとの構築・設定ロール（backend, database, docker, secrets 等）
   - `vault/`: 暗号化関連のテンプレートとドキュメント

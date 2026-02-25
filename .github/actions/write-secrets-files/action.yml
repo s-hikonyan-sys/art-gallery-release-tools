@@ -1,0 +1,50 @@
+name: 'Write Secrets Files'
+description: 'Writes pre-encrypted secrets directly to files for secrets-api deployment.'
+
+inputs:
+  secret_key:
+    description: 'The secret key for secrets-api config.yaml.'
+    required: true
+  db_password_encrypted:
+    description: 'The Fernet-encrypted database password (encrypted:xxxxx format).'
+    required: true
+  env_name:
+    description: 'The environment name (e.g., prod, dev).'
+    required: true
+
+outputs:
+  secrets_yaml_encrypted_path:
+    description: 'The absolute path to the generated secrets.yaml.encrypted file.'
+    value: ${{ steps.write_files.outputs.secrets_yaml_encrypted_path }}
+  config_yaml_path:
+    description: 'The absolute path to the generated config.yaml file.'
+    value: ${{ steps.write_files.outputs.config_yaml_path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Write secrets files
+      id: write_files
+      shell: bash
+      run: |
+        OUTPUT_DIR="${GITHUB_WORKSPACE}/ansible/secrets_output"
+        mkdir -p "${OUTPUT_DIR}"
+        chmod 700 "${OUTPUT_DIR}"
+
+        # secrets.yaml.encrypted の生成（暗号化済み内容をそのまま書き出す）
+        SECRETS_FILE="${OUTPUT_DIR}/secrets.yaml.encrypted"
+        cat <<EOF > "${SECRETS_FILE}"
+        database:
+          password: "${{ inputs.db_password_encrypted }}"
+        EOF
+        chmod 600 "${SECRETS_FILE}"
+
+        # config.yaml の生成
+        CONFIG_FILE="${OUTPUT_DIR}/config.yaml"
+        cat <<EOF > "${CONFIG_FILE}"
+        secret_key: "${{ inputs.secret_key }}"
+        EOF
+        chmod 600 "${CONFIG_FILE}"
+
+        echo "secrets_yaml_encrypted_path=${SECRETS_FILE}" >> $GITHUB_OUTPUT
+        echo "config_yaml_path=${CONFIG_FILE}" >> $GITHUB_OUTPUT
