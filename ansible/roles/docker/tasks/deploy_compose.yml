@@ -2,15 +2,6 @@
 # docker-compose.ymlのデプロイ
 # 環境に応じたテンプレートを使用して生成します
 
-# Vault変数の読み込み（secrets_vault_file_path は pre_tasks で設定済み）
-- name: Load vault variables for docker-compose
-  ansible.builtin.include_vars:
-    file: "{{ secrets_vault_file_path }}"
-  tags:
-    - docker
-    - deploy-compose
-    - deploy-all
-
 - name: Deploy docker-compose.yml from template
   ansible.builtin.template:
     src: docker-compose.yml.j2
