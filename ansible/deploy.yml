@@ -61,7 +61,7 @@
     - name: Deploy frontend (directory setup)
       ansible.builtin.include_role:
         name: frontend
-        tasks_from: deploy
+        tasks_from: deploy_compose
       tags:
         - deploy-frontend
         - deploy-all
