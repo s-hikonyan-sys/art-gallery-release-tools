@@ -1,9 +1,6 @@
 # ===========================================
 # 機密情報・プライベートファイル
 # ===========================================
-ansible/vault/vault-config.yaml.vault.dev
-ansible/vault/vault-config.yaml.vault.prod
-ansible/vault/vault-config.yaml.vault.staging
 !ansible/vault/*.example
 # Ansible Vaultパスワードファイル
 ansible/.vault_pass

@@ -1,20 +1,4 @@
 ---
-- name: Load vault variables  
-  ansible.builtin.include_vars:    
-    file: "{{ secrets_vault_file_path }}"
-  no_log: true  
-  tags:    
-    - deploy-database-code
-    - database-migration
-
-- name: Set database password fact
-  ansible.builtin.set_fact:    
-    db_password: "{{ database['password'] }}"
-  no_log: true  
-  tags:    
-    - deploy-database-code
-    - database-migration
-
 - name: Deploy secrets_api_config.sh for database entrypoint
   ansible.builtin.template:
     src: secrets_api_config.sh.j2

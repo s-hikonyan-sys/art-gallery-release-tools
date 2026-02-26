@@ -2,10 +2,6 @@
 - name: Deploy Database
   hosts: "{{ target_hosts }}"
   become: "{{ ansible_become }}"
-  pre_tasks:
-    - name: Setup vault configuration
-      ansible.builtin.import_tasks: tasks/setup-vault.yml
-      tags: [always]
   tasks:
     - name: Deploy docker-compose.yml
       ansible.builtin.include_role: { name: docker, tasks_from: deploy_compose }

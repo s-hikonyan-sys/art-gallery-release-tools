@@ -5,7 +5,7 @@ services:
     volumes:
       - ./conf/secrets/config:/app/config:ro
       - ./logs/secrets:/app/logs:rw
-      - ./src/{{ service_repo_names.secrets }}:/app:ro
+      - ./src/{{ service_repo_names.secrets }}:/app:rw
       - ./conf/secrets/tokens:/app/tokens:rw
     restart: "no"
     healthcheck:
