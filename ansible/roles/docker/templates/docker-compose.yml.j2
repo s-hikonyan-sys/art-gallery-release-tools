@@ -3,9 +3,9 @@ services:
     image: "{{ image_names.secrets | mandatory('image_names.secrets must be set in inventory') }}:{{ secrets_version | mandatory('secrets_version must be provided via extra-vars or a variable source') }}"
     container_name: "{{ container_names.secrets | mandatory('container_names.secrets must be set in inventory') }}"
     volumes:
+      - ./src/{{ service_repo_names.secrets }}:/app:rw
       - ./conf/secrets/config:/app/config:ro
       - ./logs/secrets:/app/logs:rw
-      - ./src/{{ service_repo_names.secrets }}:/app:rw
       - ./conf/secrets/tokens:/app/tokens:rw
     restart: "no"
     healthcheck:
