@@ -42,12 +42,6 @@ deployment_paths:
   logs_dir: "{{ deployment_paths.deployment_dir }}/logs"
   remote_temp_dir: "{{ deployment_paths.deployment_dir }}/tmp"
 
-# Vault設定の構造化
-vault_config:
-  vault_file:
-    production: "{{ playbook_dir }}/../vault/vault-config.yaml.vault.prod"
-    dev: "{{ playbook_dir }}/../vault/vault-config.yaml.vault.dev"
-
 # コンテナ・イメージ名の命名規則
 container_names:
   postgres: "{{ app_name }}-db"
