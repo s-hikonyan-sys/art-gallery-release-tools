@@ -89,14 +89,6 @@ jobs:
           echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Setup Ansible Vault for Production Deployment
-        uses: ./.github/actions/setup-ansible-vault
-        with:
-          ansible_vault_password: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
-          env_name: prod 
-          db_password_plaintext: ${{ secrets.PROD_DB_PASSWORD_PLAINTEXT }}
-          secret_key_plaintext: ${{ secrets.PROD_SECRET_KEY_PLAINTEXT }}
-
       # --- デプロイ工程 ---
       - name: Deploy Backend Application
         run: |
@@ -116,7 +108,6 @@ jobs:
           cd ansible
           ansible-playbook playbook_deploy_backend.yml \
             --inventory inventory/production.yml \
-            --vault-password-file .vault_pass \
             --extra-vars '{
               "target_hosts": "production",
               "prod_host": "${{ vars.PROD_HOST }}",
@@ -124,6 +115,8 @@ jobs:
               "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
               "backend_ref": "${{ env.BACKEND_REF }}",
               "backend_image_tag": "${{ env.BACKEND_IMAGE_TAG }}",
+              "postgres_image_tag": "${{ env.RELEASE_VERSION }}",
+              "secrets_version": "${{ env.RELEASE_VERSION }}",
               "github_token_backend": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}",
               "github_token_release_tools": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}"
             }' \

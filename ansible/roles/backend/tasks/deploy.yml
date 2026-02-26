@@ -2,16 +2,6 @@
 # バックエンドデプロイ関連処理
 # 設定ファイル生成など
 
-# Vault変数の読み込み（secrets_vault_file_path は pre_tasks で設定済み）
-- name: Load vault variables
-  ansible.builtin.include_vars:
-    file: "{{ secrets_vault_file_path }}"
-  tags:
-    - backend
-    - deploy
-    - deploy-backend
-    - deploy-all
-
 - name: Ensure backend logs directory exists
   ansible.builtin.file:
     path: "{{ deployment_paths.logs_dir }}/backend"
