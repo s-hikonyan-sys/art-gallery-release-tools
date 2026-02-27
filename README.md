@@ -37,11 +37,9 @@
 
 ## 全体構成図
 
-Frontend / Nginx リポジトリ・コンテナは次ステップで移行予定のため図には含めていません。
-
 ```mermaid
 graph TB
-    subgraph GitHub_MultiRepo["GitHub (Multi-Repo) ※ Step 2.5 完了時点"]
+    subgraph GitHub_MultiRepo["GitHub (Multi-Repo) ※ Step 3 完了時点"]
         subgraph Backend_Repo["art-gallery-backend (Public)"]
             BA["backend/<br/>- Python ソースコード"]
             BA -->|"git push"| BAGHA_CI["Backend CI<br/>- Python Test / Linter"]
@@ -57,17 +55,32 @@ graph TB
             SEA -->|"git push"| SEGHA_CI["Secrets CI<br/>- Test / Linter"]
         end
 
+        subgraph Frontend_Repo["art-gallery-frontend (Public)"]
+            FEA["frontend/<br/>- Vue.js ソースコード"]
+            FEA -->|"git push → main"| FEGHA_CI["Frontend CI Build<br/>- Lint / Test<br/>- npm run build<br/>- Artifact Upload"]
+        end
+
+        subgraph Nginx_Repo["art-gallery-nginx (Public)"]
+            NGA["nginx/<br/>- nginx.conf"]
+            NGA -->|"git push → main"| NGGHA_CI["Nginx CI<br/>- make lint"]
+        end
+
         subgraph ReleaseTools_Repo["art-gallery-release-tools (Public)"]
             subgraph RT_Workflows["ワークフロー群 (全て workflow_dispatch による手動実行)"]
                 RT_BUILD["build_backend.yml<br/>build_database.yml<br/>build_secrets.yml"]
                 RT_DEP_B["deploy_backend.yml"]
                 RT_DEP_D["deploy_database.yml"]
                 RT_DEP_S["deploy_secrets.yml"]
+                RT_DEP_FE["deploy_frontend.yml<br/>(frontend_artifact_id 指定)"]
+                RT_DEP_NG["deploy_nginx.yml<br/>(nginx_ref 指定)"]
             end
             RT_ACT_WRITE["write-secrets-files/action.yml<br/>(事前暗号化済み値 → ファイル出力)"]
             RT_ACT_VAULT["setup-ansible-vault/action.yml<br/>(必要時)"]
         end
     end
+
+    FEGHA_CI -->|"gh api (artifact_id 渡し)"| RT_DEP_FE
+    NGGHA_CI -->|"gh api (nginx_ref 渡し)"| RT_DEP_NG
 
     RT_DEP_S -.->|"uses"| RT_ACT_WRITE
     RT_DEP_B -.->|"uses (必要時)"| RT_ACT_VAULT
@@ -78,13 +91,19 @@ graph TB
     RT_DEP_S -->|"① write-secrets-files<br/>② Ansible で設定ファイル配置<br/>③ Secrets API コンテナ再起動"| Server_Env
     RT_DEP_D -->|"④ entrypoint.sh 配置<br/>⑤ DB マイグレーション適用"| Server_Env
     RT_DEP_B -->|"⑥ Backend コード git pull<br/>⑦ Backend コンテナ再起動"| Server_Env
+    RT_DEP_FE -->|"⑧ Artifact DL → dist/frontend 展開<br/>⑨ Nginx ホットリロード"| Server_Env
+    RT_DEP_NG -->|"⑩ nginx.conf git pull<br/>⑪ nginx -s reload"| Server_Env
 
     style BAGHA_CI fill:#E3F2FD,stroke:#4A90E2,stroke-width:2px
     style DBGHA_CI fill:#FFF3E0,stroke:#FF8C42,stroke-width:2px
     style SEGHA_CI fill:#F3E5F5,stroke:#9C27B0,stroke-width:2px
+    style FEGHA_CI fill:#E8F5E9,stroke:#43A047,stroke-width:2px
+    style NGGHA_CI fill:#FFF8E1,stroke:#F9A825,stroke-width:2px
 
     subgraph Server_Env["本番サーバー (/opt/art-gallery/)"]
         Host_Conf["conf/secrets/<br/>- config/secrets.yaml.encrypted<br/>- config/config.yaml<br/>- tokens/ ← ホスト側共有ディレクトリ"]
+        Host_FE["dist/frontend/<br/>(Artifact から展開)"]
+        Host_NG["conf/nginx/nginx.conf<br/>(git pull で配置)"]
 
         subgraph SA_C["art-gallery-secrets-api  (restart: no)"]
             S_SA["Flask + SecretManager<br/>起動時: tokens/ にワンタイムトークン生成<br/>healthcheck: GET /health"]
@@ -101,6 +120,10 @@ graph TB
             S_CODE["src/art-gallery-backend/<br/>(git pull で配置)"]
         end
 
+        subgraph NG_C["nginx  (depends_on: backend started)"]
+            S_NG["nginx:alpine<br/>公式イメージ"]
+        end
+
         PG_Vol["postgres_data volume"]
     end
 
@@ -113,10 +136,14 @@ graph TB
     S_PG -.->|"Volume Mount"| S_MIG
     S_PG -.->|"Volume Mount<br/>(データ永続化)"| PG_Vol
     S_BE -->|"DB 接続<br/>(取得したパスワードで接続)"| S_PG
+    S_NG -.->|"Volume Mount (ro)"| Host_FE
+    S_NG -.->|"Volume Mount (ro)"| Host_NG
+    S_NG -->|"Proxy /api"| S_BE
 
     style S_SA fill:#9C27B0,stroke:#6A1B9A,stroke-width:2px,color:#fff
     style S_BE fill:#4A90E2,stroke:#2E5C8A,stroke-width:2px,color:#fff
     style S_PG fill:#FF8C42,stroke:#CC6F35,stroke-width:2px,color:#fff
+    style S_NG fill:#43A047,stroke:#2E7D32,stroke-width:2px,color:#fff
 ```
 
 ---
@@ -130,16 +157,20 @@ graph TB
 | art-gallery-backend | Public | Python ソースコード |
 | art-gallery-database | Public | DB マイグレーション、postgres-entrypoint.sh |
 | art-gallery-secrets | Public | SecretManager、復号 API（Flask） |
+| art-gallery-frontend | Public | Vue.js ソースコード（CI でビルド、Artifact 出力） |
+| art-gallery-nginx | Public | nginx.conf（git pull でサーバーに配置） |
 | art-gallery-release-tools | Public | Ansible Playbook、Dockerfile、ワークフロー |
-
-※ art-gallery-frontend / art-gallery-nginx は次ステップで移行予定。
 
 #### ワークフロー（全て workflow_dispatch による手動実行）
 
 - **ビルド**: `build_backend.yml` / `build_database.yml` / `build_secrets.yml` — 各コンポーネントの Docker イメージをビルドし GHCR にプッシュ
 - **デプロイ**: `deploy_backend.yml` — Backend コードを git pull してコンテナを再起動  
   `deploy_database.yml` — postgres-entrypoint.sh を配置し DB マイグレーションを適用  
-  `deploy_secrets.yml` — `write-secrets-files` アクションで設定ファイルを生成し Secrets API コンテナを再起動
+  `deploy_secrets.yml` — `write-secrets-files` アクションで設定ファイルを生成し Secrets API コンテナを再起動  
+  `deploy_frontend.yml` — GitHub Artifact をダウンロードして `dist/frontend/` に展開後、Nginx をホットリロード  
+  `deploy_nginx.yml` — `nginx.conf` を git pull で取得・配置し、`nginx -s reload` でホットリロード
+
+※ `deploy_frontend.yml` / `deploy_nginx.yml` は各リポジトリの CI（`art-gallery-frontend` / `art-gallery-nginx`）が `gh api` 経由で自動トリガーする。
 
 #### カスタムアクション
 
@@ -166,9 +197,17 @@ graph TB
    - `GET /secrets/database/password` でパスワードを取得し DB 接続  
    - アプリケーションコードは `src/art-gallery-backend/`（git pull で配置、Volume Mount）
 
+4. **nginx**（`depends_on: backend started`）が起動  
+   - 公式イメージ（`nginx:alpine`）を使用。イメージのビルドは不要  
+   - `conf/nginx/nginx.conf` を ro マウント（`deploy_nginx.yml` で更新・ホットリロード）  
+   - `dist/frontend/` を ro マウントして静的ファイルを配信（`deploy_frontend.yml` で Artifact 展開）  
+   - `/api` へのリクエストは `art-gallery-api` コンテナへリバースプロキシ
+
 #### 設計上のポイント
 
 - **復号の一元化**: 復号ロジックは `art-gallery-secrets` のみが保持。Backend / PostgreSQL は自前で復号しない
 - **使い捨てトークン**: トークンは使用後に即削除。リプレイ攻撃を防止
-- **コードとイメージの分離**: Docker イメージは実行環境のみ。アプリケーションコードは git pull でボリュームマウント
+- **コードとイメージの分離**: Docker イメージは実行環境のみ。アプリケーションコードは git pull または Artifact 展開でボリュームマウント
+- **Nginx ゼロダウンタイム更新**: 設定変更は `nginx -s reload` によるホットリロードで適用。コンテナ再起動不要
+- **CI 起点の自動デプロイ**: Frontend / Nginx は各リポジトリの CI が `gh api` で `deploy_*` ワークフローをトリガー。release-tools への直接アクセス不要
 - **完全手動デプロイ**: 全デプロイは `workflow_dispatch`（手動トリガー）。意図しない更新を防止

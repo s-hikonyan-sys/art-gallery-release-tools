@@ -1,0 +1,3 @@
+---
+# nginx ロール: 設定ファイルの配置とホットリロード
+- import_tasks: deploy.yml

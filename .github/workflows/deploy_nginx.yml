@@ -1,0 +1,48 @@
+name: Deploy Nginx
+
+on:
+  workflow_dispatch:
+    inputs:
+      nginx_ref:
+        description: 'デプロイする nginx リポジトリの ref (branch/tag/sha)'
+        required: false
+        default: 'main'
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout art-gallery-release-tools repository
+        uses: actions/checkout@v4
+
+      - name: Install Ansible and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Setup SSH for Production Deployment
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_deploy_key
+          chmod 600 ~/.ssh/ansible_deploy_key
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy Nginx Configuration
+        run: |
+          cd ansible
+          ansible-playbook playbook_deploy_nginx.yml \
+            --inventory inventory/production.yml \
+            --extra-vars '{
+              "target_hosts": "production",
+              "prod_host": "${{ vars.PROD_HOST }}",
+              "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
+              "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
+              "nginx_ref": "${{ github.event.inputs.nginx_ref }}",
+              "github_token_nginx": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_NGINX }}"
+            }' \
+            --tags "deploy-nginx,reload-nginx"

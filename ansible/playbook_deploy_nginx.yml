@@ -1,0 +1,16 @@
+---
+# Nginx 設定デプロイ専用プレイブック
+# nginx.conf を git pull して配置し、ホットリロードする
+
+- name: Deploy Nginx Configuration
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Deploy nginx config and reload
+      ansible.builtin.include_role:
+        name: nginx
+        tasks_from: deploy
+      tags:
+        - deploy-nginx
+        - reload-nginx

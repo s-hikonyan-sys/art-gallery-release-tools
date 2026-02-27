@@ -1,0 +1,65 @@
+---
+# GitHub Artifacts から Frontend ビルド済み成果物をダウンロードして配置
+# npm install / npm run build は CI 側で実施済みのため、このロールではビルド処理を行わない
+
+- name: Ensure frontend dist directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.dist_dir }}/frontend"
+    state: directory
+    mode: '0755'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - frontend
+    - deploy-frontend
+    - deploy-all
+
+- name: Ensure remote temp directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.remote_temp_dir }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - frontend
+    - deploy-frontend
+    - deploy-all
+
+- name: Download Frontend Artifact ZIP from GitHub
+  ansible.builtin.uri:
+    url: "https://api.github.com/repos/{{ github_owner }}/{{ service_repo_names.frontend }}/actions/artifacts/{{ frontend_artifact_id | mandatory('frontend_artifact_id must be provided') }}/zip"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ github_token_frontend | mandatory('github_token_frontend must be provided') }}"
+      Accept: "application/vnd.github+json"
+      X-GitHub-Api-Version: "2022-11-28"
+    dest: "{{ deployment_paths.remote_temp_dir }}/frontend-dist.zip"
+    status_code: 200
+    # GitHub API は ZIP 取得時にリダイレクトを返すため必須
+    follow_redirects: all
+  tags:
+    - frontend
+    - deploy-frontend
+    - deploy-all
+
+- name: Extract Frontend Artifact to dist directory
+  ansible.builtin.unarchive:
+    src: "{{ deployment_paths.remote_temp_dir }}/frontend-dist.zip"
+    dest: "{{ deployment_paths.dist_dir }}/frontend"
+    remote_src: yes
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - frontend
+    - deploy-frontend
+    - deploy-all
+
+- name: Remove Frontend Artifact ZIP
+  ansible.builtin.file:
+    path: "{{ deployment_paths.remote_temp_dir }}/frontend-dist.zip"
+    state: absent
+  tags:
+    - frontend
+    - deploy-frontend
+    - deploy-all

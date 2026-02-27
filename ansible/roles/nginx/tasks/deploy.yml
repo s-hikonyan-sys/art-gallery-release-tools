@@ -1,0 +1,72 @@
+---
+# Nginx 設定ファイルを git pull して配置し、ホットリロードする
+# イメージのビルドは行わない（公式イメージ + ボリュームマウント構成）
+
+- name: Ensure nginx config directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.conf_dir }}/nginx"
+    state: directory
+    mode: '0755'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - nginx
+    - deploy-nginx
+    - deploy-all
+
+- name: Ensure nginx logs directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.logs_dir }}/nginx"
+    state: directory
+    mode: '0755'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - nginx
+    - deploy-nginx
+    - deploy-all
+
+- name: Pull nginx configuration from GitHub
+  ansible.builtin.git:
+    repo: "https://{{ github_token_nginx | mandatory('github_token_nginx must be provided') }}@github.com/{{ github_owner }}/{{ service_repo_names.nginx }}.git"
+    dest: "{{ deployment_paths.src_dir }}/{{ service_repo_names.nginx }}"
+    version: "{{ nginx_ref | mandatory('nginx_ref must be provided') }}"
+    force: yes
+  become: yes
+  tags:
+    - nginx
+    - deploy-nginx
+    - deploy-all
+
+- name: Copy nginx.conf to conf directory
+  ansible.builtin.copy:
+    src: "{{ deployment_paths.src_dir }}/{{ service_repo_names.nginx }}/nginx.conf"
+    dest: "{{ deployment_paths.conf_dir }}/nginx/nginx.conf"
+    remote_src: yes
+    mode: '0644'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - nginx
+    - deploy-nginx
+    - deploy-all
+
+- name: Test nginx configuration syntax
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} nginx -t
+  register: nginx_test_result
+  failed_when: nginx_test_result.rc != 0
+  tags:
+    - nginx
+    - deploy-nginx
+    - reload-nginx
+    - deploy-all
+
+- name: Reload nginx (hot reload, no downtime)
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} nginx -s reload
+  when: nginx_test_result.rc == 0
+  tags:
+    - nginx
+    - reload-nginx
+    - deploy-all

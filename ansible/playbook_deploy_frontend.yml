@@ -1,0 +1,31 @@
+---
+# Frontend デプロイ専用プレイブック
+# CI でビルドされた Artifact をダウンロードして配置し、Nginx をホットリロードする
+
+- name: Deploy Frontend Application
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Deploy docker-compose.yml
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: deploy_compose
+      tags:
+        - docker
+        - deploy-compose
+        - deploy-frontend
+
+    - name: Deploy frontend (download artifact and place)
+      ansible.builtin.include_role:
+        name: frontend
+        tasks_from: deploy
+      tags:
+        - deploy-frontend
+
+    - name: Reload nginx
+      ansible.builtin.include_role:
+        name: nginx
+        tasks_from: deploy
+      tags:
+        - reload-nginx

@@ -1,0 +1,3 @@
+---
+# frontend ロール: Artifact のダウンロードと展開
+- import_tasks: deploy.yml
