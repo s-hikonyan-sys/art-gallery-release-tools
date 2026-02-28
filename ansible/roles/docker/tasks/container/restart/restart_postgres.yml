@@ -1,7 +1,9 @@
 ---
+# Postgres コンテナの再起動
+
 - name: Restart postgres container
   ansible.builtin.shell: |
-    cd {{ deployment_dir }}
+    cd {{ deployment_paths.deployment_dir }}
     docker compose restart postgres
   tags:
     - docker

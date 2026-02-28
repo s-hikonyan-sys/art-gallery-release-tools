@@ -2,7 +2,7 @@
 - name: Stop backend container
   ansible.builtin.shell: |
     cd {{ deployment_paths.deployment_dir }}
-    docker compose stop postgres
+    docker compose stop backend
   tags:
     - docker
-    - stop-postgres
+    - stop-backend

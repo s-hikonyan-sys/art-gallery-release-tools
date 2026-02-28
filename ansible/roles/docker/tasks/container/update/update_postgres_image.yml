@@ -1,7 +1,9 @@
 ---
-- name: Pull latest Postgres image and recreate container  
+# Postgres コンテナのイメージを更新し、再作成・再起動する
+
+- name: Pull latest Postgres image and recreate container
   community.docker.docker_compose_v2:    
-    project_src: "{{ deployment_dir }}"
+    project_src: "{{ deployment_paths.deployment_dir }}"
     files:
       - docker-compose.yml
     services:

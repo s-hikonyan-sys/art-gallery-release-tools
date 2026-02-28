@@ -1,7 +1,10 @@
 ---
+# Postgres コンテナの起動
+# イメージが存在しない場合はプルを試みます
+
 - name: Start postgres container
   ansible.builtin.shell: |
-    cd {{ deployment_dir }}
+    cd {{ deployment_paths.deployment_dir }}
     docker compose up -d postgres
   become: no
   tags:
