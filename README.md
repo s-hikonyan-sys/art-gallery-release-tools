@@ -28,12 +28,49 @@
 
 ## ディレクトリ構成
 
-- `.github/`: CI/CD ワークフローおよびシークレット書き出し用のカスタムアクション（`write-secrets-files`）
-- `ansible/`: デプロイおよび構築用の Ansible Playbook 一式
-  - `group_vars/`: 全環境共通の基幹変数定義
-  - `inventory/`: 環境定義 (ci.yml, production.yml)
-  - `roles/`: 各サービスごとの構築・設定ロール（backend, database, docker, secrets 等）
-  - `vault/`: 暗号化関連のテンプレートとドキュメント
+```
+art-gallery-release-tools/
+├── .github/
+│   ├── actions/
+│   │   └── write-secrets-files/  # カスタムアクション（GitHub Secrets → ファイル出力）
+│   └── workflows/
+│       ├── build_backend.yml     # イメージビルド（workflow_dispatch）
+│       ├── build_database.yml
+│       ├── build_secrets.yml
+│       ├── deploy_backend.yml    # コード反映・コンテナ再起動（workflow_dispatch）
+│       ├── deploy_database.yml
+│       ├── deploy_secrets.yml
+│       ├── deploy_frontend.yml   # Artifact 展開 + Nginx リロード（CI 自動トリガー）
+│       └── deploy_nginx.yml      # nginx.conf 更新 + Nginx リロード（CI 自動トリガー）
+└── ansible/
+    ├── group_vars/all.yml        # 全環境共通変数（デプロイパス、イメージ名等）
+    ├── inventory/
+    │   ├── production.yml        # 本番環境ホスト定義
+    │   └── ci.yml                # CI 環境ホスト定義
+    ├── playbook_build_*.yml      # ビルド用プレイブック（build_*）
+    ├── playbook_deploy_*.yml     # デプロイ用プレイブック（deploy_*）
+    ├── roles/
+    │   ├── backend/
+    │   │   ├── internal/         # Dockerfile, requirements.txt（イメージビルド用）
+    │   │   ├── tasks/            # deploy.yml（git pull + コンテナ再起動）
+    │   │   └── templates/        # config.yaml.j2（Ansible テンプレート）
+    │   ├── database/
+    │   │   ├── internal/         # Dockerfile.j2（イメージビルド用）
+    │   │   └── tasks/            # deploy.yml, migrate.yml
+    │   ├── secrets/
+    │   │   ├── internal/         # Dockerfile, requirements.txt
+    │   │   └── tasks/            # deploy.yml
+    │   ├── frontend/
+    │   │   └── tasks/            # deploy.yml（Artifact DL + 展開）
+    │   ├── nginx/
+    │   │   └── tasks/            # deploy.yml（git pull + nginx -s reload）
+    │   └── docker/
+    │       ├── tasks/            # deploy_compose.yml + build/container 操作
+    │       └── templates/        # docker-compose.yml.j2
+    ├── test_resources/           # CI テスト用リソース（inventory, playbook）
+    └── vault/
+        └── README.md             # 暗号化運用ガイド
+```
 
 ## 全体構成図
 
@@ -75,7 +112,6 @@ graph TB
                 RT_DEP_NG["deploy_nginx.yml<br/>(nginx_ref 指定)"]
             end
             RT_ACT_WRITE["write-secrets-files/action.yml<br/>(事前暗号化済み値 → ファイル出力)"]
-            RT_ACT_VAULT["setup-ansible-vault/action.yml<br/>(必要時)"]
         end
     end
 
@@ -83,7 +119,6 @@ graph TB
     NGGHA_CI -->|"gh api (nginx_ref 渡し)"| RT_DEP_NG
 
     RT_DEP_S -.->|"uses"| RT_ACT_WRITE
-    RT_DEP_B -.->|"uses (必要時)"| RT_ACT_VAULT
 
     RT_BUILD -->|"イメージ ビルド & プッシュ"| GHCR["GHCR<br/>(ghcr.io)"]
     GHCR -.->|"イメージ pull"| Server_Env
@@ -175,7 +210,6 @@ graph TB
 #### カスタムアクション
 
 - **write-secrets-files/action.yml** — GitHub Secrets（`PROD_SECRET_KEY`、`PROD_DB_PASSWORD_ENCRYPTED`）を受け取り、`secrets.yaml.encrypted` / `config.yaml` をそのまま書き出す。暗号化・復号は行わない
-- **setup-ansible-vault/action.yml** — 必要時に使用。Ansible Vault ファイルを動的生成
 
 #### サーバー上のコンテナ起動順序とデータフロー
 
