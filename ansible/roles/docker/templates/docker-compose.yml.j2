@@ -4,7 +4,7 @@ services:
     container_name: "{{ container_names.secrets | mandatory('container_names.secrets must be set in inventory') }}"
     volumes:
       - ./src/{{ service_repo_names.secrets }}:/app:rw
-      - ./conf/secrets/config:/app/config:ro
+      - ./conf/secrets/config:/app/secrets_config:ro
       - ./logs/secrets:/app/logs:rw
       - ./conf/secrets/tokens:/app/tokens:rw
     restart: "no"
