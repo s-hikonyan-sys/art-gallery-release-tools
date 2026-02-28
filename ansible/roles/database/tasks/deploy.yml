@@ -18,14 +18,25 @@
     group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
   tags: [deploy-database-code]
   
-- name: Deploy postgres-entrypoint.sh and migrations from GitHub  
-  ansible.builtin.git:    
-    repo: "https://{{ github_token_database }}@github.com/{{ github_owner }}/{{ service_repo_names.postgres }}.git"    
-    dest: "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}"    
-    version: "{{ database_ref | mandatory('database_ref must be provided') }}"    
-    force: yes  
-  become: yes  
-  tags:    
+- name: Deploy postgres-entrypoint.sh and migrations from GitHub
+  # git -c によるインメモリ認証設定を使用。.git/config へのトークン書き込みを防ぐ
+  ansible.builtin.shell: |
+    set -e
+    DEST="{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}"
+    REPO_URL="https://github.com/{{ github_owner }}/{{ service_repo_names.postgres }}.git"
+    TOKEN_REWRITE="url.https://x-access-token:{{ github_token_database }}@github.com/.insteadOf=https://github.com/"
+
+    if [ -d "${DEST}/.git" ]; then
+      git -C "${DEST}" -c "${TOKEN_REWRITE}" fetch --depth 1 origin "{{ database_ref | mandatory('database_ref must be provided') }}"
+      git -C "${DEST}" reset --hard FETCH_HEAD
+    else
+      git -c "${TOKEN_REWRITE}" clone --depth 1 --branch "{{ database_ref | mandatory('database_ref must be provided') }}" \
+        "${REPO_URL}" "${DEST}"
+    fi
+  no_log: true
+  become: yes
+  become_user: "{{ app_user }}"
+  tags:
     - deploy-database-code
 
 - name: Copy postgres-entrypoint.sh to deployment directory  

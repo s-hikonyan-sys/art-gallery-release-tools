@@ -42,12 +42,23 @@
     - deploy-all
 
 - name: Deploy backend application code from GitHub
-  ansible.builtin.git:
-    repo: "https://{{ github_token_backend }}@github.com/{{ github_owner }}/{{ service_repo_names.backend }}.git"
-    dest: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}"
-    version: "{{ backend_ref | mandatory('backend_ref must be provided') }}"
-    force: yes
+  # git -c によるインメモリ認証設定を使用。.git/config へのトークン書き込みを防ぐ
+  ansible.builtin.shell: |
+    set -e
+    DEST="{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}"
+    REPO_URL="https://github.com/{{ github_owner }}/{{ service_repo_names.backend }}.git"
+    TOKEN_REWRITE="url.https://x-access-token:{{ github_token_backend }}@github.com/.insteadOf=https://github.com/"
+
+    if [ -d "${DEST}/.git" ]; then
+      git -C "${DEST}" -c "${TOKEN_REWRITE}" fetch --depth 1 origin "{{ backend_ref | mandatory('backend_ref must be provided') }}"
+      git -C "${DEST}" reset --hard FETCH_HEAD
+    else
+      git -c "${TOKEN_REWRITE}" clone --depth 1 --branch "{{ backend_ref | mandatory('backend_ref must be provided') }}" \
+        "${REPO_URL}" "${DEST}"
+    fi
+  no_log: true
   become: yes
+  become_user: "{{ app_user }}"
   tags:
     - backend
     - deploy-backend
