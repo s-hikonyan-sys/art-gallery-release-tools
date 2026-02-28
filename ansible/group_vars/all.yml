@@ -13,10 +13,10 @@ service_repo_names:
   secrets: "art-gallery-secrets"
 
 # Dockerイメージのベースバージョン管理
+# node は Frontend ビルドを CI 側で実施するため管理対象外
 base_image_versions:
   python: "3.11-slim"
   postgres: "17"
-  node: "18-alpine"
   nginx: "1.25-alpine"
 
 # Database接続設定
@@ -51,7 +51,6 @@ container_names:
 
 # URL設定
 frontend_url: "{{ 'https' if ssl_enabled else 'http' }}://{{ domain_name }}"
-# vite_api_base_url は削除済み（Frontend は /api 相対パスを使用するため不要）
 
 # Dockerネットワーク名
 docker_network_name: "{{ app_name }}-network"

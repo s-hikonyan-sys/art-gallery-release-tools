@@ -40,15 +40,19 @@ art-gallery-release-tools/
 │       ├── deploy_backend.yml    # コード反映・コンテナ再起動（workflow_dispatch）
 │       ├── deploy_database.yml
 │       ├── deploy_secrets.yml
-│       ├── deploy_frontend.yml   # Artifact 展開 + Nginx リロード（CI 自動トリガー）
-│       └── deploy_nginx.yml      # nginx.conf 更新 + Nginx リロード（CI 自動トリガー）
+│       ├── deploy_frontend.yml        # Artifact 展開 + Nginx リロード（CI 自動トリガー）
+│       ├── deploy_nginx.yml           # nginx.conf 更新 + Nginx リロード（CI 自動トリガー）
+│       ├── reload_nginx.yml           # Nginx ホットリロードのみ（手動）
+│       └── setup_startup_service.yml  # サーバー再起動時の自動起動サービス設定（手動）
 └── ansible/
     ├── group_vars/all.yml        # 全環境共通変数（デプロイパス、イメージ名等）
     ├── inventory/
     │   ├── production.yml        # 本番環境ホスト定義
     │   └── ci.yml                # CI 環境ホスト定義
-    ├── playbook_build_*.yml      # ビルド用プレイブック（build_*）
-    ├── playbook_deploy_*.yml     # デプロイ用プレイブック（deploy_*）
+    ├── playbook_build_*.yml           # ビルド用プレイブック（build_*）
+    ├── playbook_deploy_*.yml          # デプロイ用プレイブック（deploy_*）
+    ├── playbook_reload_nginx.yml      # Nginx ホットリロード専用
+    ├── playbook_setup_startup_service.yml  # systemd 自動起動サービス設定
     ├── roles/
     │   ├── backend/
     │   │   ├── internal/         # Dockerfile, requirements.txt（イメージビルド用）
@@ -63,10 +67,10 @@ art-gallery-release-tools/
     │   ├── frontend/
     │   │   └── tasks/            # deploy.yml（Artifact DL + 展開）
     │   ├── nginx/
-    │   │   └── tasks/            # deploy.yml（git pull + nginx -s reload）
+    │   │   └── tasks/            # deploy.yml（git pull + reload） / reload.yml（reload のみ）
     │   └── docker/
-    │       ├── tasks/            # deploy_compose.yml + build/container 操作
-    │       └── templates/        # docker-compose.yml.j2
+    │       ├── tasks/            # deploy_compose.yml / setup_startup_service.yml
+    │       └── templates/        # docker-compose.yml.j2 / startup.sh.j2 / art-gallery.service.j2
     ├── test_resources/           # CI テスト用リソース（inventory, playbook）
     └── vault/
         └── README.md             # 暗号化運用ガイド
