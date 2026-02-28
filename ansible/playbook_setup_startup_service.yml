@@ -1,0 +1,22 @@
+---
+# サーバー自動起動サービスのセットアッププレイブック
+# secrets-api は restart: no のため、サーバー再起動時に全コンテナが停止する問題を解決する
+#
+# 実行タイミング:
+#   - サーバーの初回構築時
+#   - startup.sh の内容を変更したとき
+#   - サーバーを再セットアップしたとき
+#
+# 通常のコードデプロイでは実行不要
+
+- name: Setup Startup Service for Art Gallery
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Setup systemd startup service
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: setup_startup_service
+      tags:
+        - setup-startup-service

@@ -90,16 +90,32 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       # --- デプロイ工程 ---
+      - name: Write Ansible extra-vars file
+        run: |
+          cat > /tmp/ansible_vars.json << 'VARS_EOF'
+          {
+            "target_hosts": "production",
+            "prod_host": "${{ vars.PROD_HOST }}",
+            "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
+            "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
+            "backend_ref": "${{ env.BACKEND_REF }}",
+            "backend_image_tag": "${{ env.BACKEND_IMAGE_TAG }}",
+            "postgres_image_tag": "${{ env.RELEASE_VERSION }}",
+            "secrets_version": "${{ env.RELEASE_VERSION }}",
+            "github_token_backend": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}",
+            "github_token_release_tools": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}"
+          }
+          VARS_EOF
+          chmod 600 /tmp/ansible_vars.json
+
       - name: Deploy Backend Application
         run: |
           TAGS=""
           
-          # イメージ更新が選ばれたら
           if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
             TAGS="deploy-compose,update-backend-image"
           fi
           
-          # コード更新が選ばれたら（カンマで連結、すでにTAGSがあればカンマを挟む）
           if [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
             [ -n "$TAGS" ] && TAGS="$TAGS,"
             TAGS="${TAGS}deploy-backend,restart-backend"
@@ -108,16 +124,9 @@ jobs:
           cd ansible
           ansible-playbook playbook_deploy_backend.yml \
             --inventory inventory/production.yml \
-            --extra-vars '{
-              "target_hosts": "production",
-              "prod_host": "${{ vars.PROD_HOST }}",
-              "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
-              "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
-              "backend_ref": "${{ env.BACKEND_REF }}",
-              "backend_image_tag": "${{ env.BACKEND_IMAGE_TAG }}",
-              "postgres_image_tag": "${{ env.RELEASE_VERSION }}",
-              "secrets_version": "${{ env.RELEASE_VERSION }}",
-              "github_token_backend": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}",
-              "github_token_release_tools": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}"
-            }' \
+            --extra-vars "@/tmp/ansible_vars.json" \
             --tags "$TAGS"
+
+      - name: Remove extra-vars file
+        if: always()
+        run: rm -f /tmp/ansible_vars.json

@@ -1,0 +1,55 @@
+#!/bin/bash
+# art-gallery 全コンテナの起動順序制御スクリプト
+# systemd の art-gallery.service から呼び出される
+# secrets-api は restart: no のため、サーバー再起動後にこのスクリプトで手動起動が必要
+
+set -e
+
+APP_DIR="{{ deployment_paths.deployment_dir }}"
+COMPOSE_FILE="${APP_DIR}/docker-compose.yml"
+
+SECRETS_CONTAINER="{{ container_names.secrets }}"
+POSTGRES_CONTAINER="{{ container_names.postgres }}"
+BACKEND_CONTAINER="{{ container_names.backend }}"
+NGINX_CONTAINER="{{ container_names.nginx }}"
+
+HEALTH_RETRIES=12       # 最大 12 回 × 5 秒 = 60 秒待機
+HEALTH_INTERVAL=5
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+# --- 1. secrets-api を明示的に起動 ---
+log "Starting secrets-api container..."
+docker compose -f "${COMPOSE_FILE}" up -d "${SECRETS_CONTAINER}"
+
+# --- 2. secrets-api のヘルスチェックが通るまで待機 ---
+log "Waiting for secrets-api to become healthy (max ${HEALTH_RETRIES} retries)..."
+for i in $(seq 1 "${HEALTH_RETRIES}"); do
+    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "${SECRETS_CONTAINER}" 2>/dev/null || echo "missing")
+
+    if [ "${STATUS}" = "healthy" ]; then
+        log "secrets-api is healthy."
+        break
+    fi
+
+    if [ "${i}" -eq "${HEALTH_RETRIES}" ]; then
+        log "ERROR: secrets-api did not become healthy within $((HEALTH_RETRIES * HEALTH_INTERVAL)) seconds."
+        log "Container status: ${STATUS}"
+        log "Check logs: docker logs ${SECRETS_CONTAINER}"
+        exit 1
+    fi
+
+    log "  Waiting... (${i}/${HEALTH_RETRIES}) current status: ${STATUS}"
+    sleep "${HEALTH_INTERVAL}"
+done
+
+# --- 3. 残りのコンテナを起動（depends_on の順序は compose が管理）---
+log "Starting remaining services (postgres, backend, nginx)..."
+docker compose -f "${COMPOSE_FILE}" up -d \
+    "${POSTGRES_CONTAINER}" \
+    "${BACKEND_CONTAINER}" \
+    "${NGINX_CONTAINER}"
+
+log "All art-gallery services started successfully."

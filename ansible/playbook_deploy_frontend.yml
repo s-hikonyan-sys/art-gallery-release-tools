@@ -23,9 +23,9 @@
       tags:
         - deploy-frontend
 
-    - name: Reload nginx
+    - name: Reload nginx (conf reload only, no git pull)
       ansible.builtin.include_role:
         name: nginx
-        tasks_from: deploy
+        tasks_from: reload
       tags:
         - reload-nginx

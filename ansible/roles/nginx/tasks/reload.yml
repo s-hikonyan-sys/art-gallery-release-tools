@@ -1,0 +1,23 @@
+---
+# Nginx ホットリロードのみ（git pull / conf コピーなし）
+# frontend デプロイ後に dist/frontend の変更を nginx に認識させるために使用
+# nginx.conf の変更を伴わないため git pull は不要
+
+- name: Test nginx configuration syntax
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} nginx -t
+  register: nginx_reload_test
+  failed_when: nginx_reload_test.rc != 0
+  tags:
+    - nginx
+    - reload-nginx
+    - deploy-frontend
+
+- name: Reload nginx (hot reload, no downtime)
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} nginx -s reload
+  when: nginx_reload_test.rc == 0
+  tags:
+    - nginx
+    - reload-nginx
+    - deploy-frontend

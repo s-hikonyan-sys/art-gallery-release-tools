@@ -1,0 +1,82 @@
+name: Setup Startup Service
+
+# このワークフローは以下のタイミングで手動実行する
+#   - サーバーの初回構築時
+#   - startup.sh の内容を変更したとき
+#   - サーバーを再セットアップしたとき
+#
+# 通常のコードデプロイでは実行不要
+# systemd サービスを変更するため、誤トリガーを防ぐ確認入力が必要
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: |
+          ⚠️ このワークフローはサーバーの systemd サービスを変更します。
+          実行を確認するために "yes" と入力してください。
+        required: true
+        type: string
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout art-gallery-release-tools repository
+        uses: actions/checkout@v4
+
+      - name: Validate confirmation input
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "yes" ]; then
+            echo "::error::確認入力が 'yes' ではありません。実行を中止します。"
+            exit 1
+          fi
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Setup SSH for Production Deployment
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_deploy_key
+          chmod 600 ~/.ssh/ansible_deploy_key
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Write Ansible extra-vars file
+        run: |
+          cat > /tmp/ansible_vars.json << 'VARS_EOF'
+          {
+            "target_hosts": "production",
+            "prod_host": "${{ vars.PROD_HOST }}",
+            "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
+            "prod_ssh_key_path": "~/.ssh/ansible_deploy_key"
+          }
+          VARS_EOF
+          chmod 600 /tmp/ansible_vars.json
+
+      - name: Setup Startup Service
+        run: |
+          cd ansible
+          ansible-playbook playbook_setup_startup_service.yml \
+            --inventory inventory/production.yml \
+            --extra-vars "@/tmp/ansible_vars.json" \
+            --tags "setup-startup-service"
+
+      - name: Remove extra-vars file
+        if: always()
+        run: rm -f /tmp/ansible_vars.json
+
+      - name: Verify service is enabled on server
+        run: |
+          ssh -i ~/.ssh/ansible_deploy_key \
+            -o StrictHostKeyChecking=no \
+            "${{ vars.PROD_SSH_USER }}@${{ vars.PROD_HOST }}" \
+            "sudo systemctl is-enabled art-gallery \
+              && echo '✅ art-gallery.service is enabled. Server reboot protection is active.' \
+              || echo '❌ WARNING: art-gallery.service is NOT enabled.'"

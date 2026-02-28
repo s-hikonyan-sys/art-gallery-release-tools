@@ -43,19 +43,28 @@ jobs:
           echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Write Ansible extra-vars file
+        run: |
+          cat > /tmp/ansible_vars.json << 'VARS_EOF'
+          {
+            "target_hosts": "production",
+            "prod_host": "${{ vars.PROD_HOST }}",
+            "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
+            "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
+            "frontend_artifact_id": "${{ github.event.inputs.frontend_artifact_id }}",
+            "github_token_frontend": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_FRONTEND }}"
+          }
+          VARS_EOF
+          chmod 600 /tmp/ansible_vars.json
+
       - name: Deploy Frontend
         run: |
           cd ansible
           ansible-playbook playbook_deploy_frontend.yml \
             --inventory inventory/production.yml \
-            --extra-vars '{
-              "target_hosts": "production",
-              "prod_host": "${{ vars.PROD_HOST }}",
-              "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
-              "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
-              "frontend_artifact_id": "${{ github.event.inputs.frontend_artifact_id }}",
-              "nginx_ref": "${{ github.event.inputs.frontend_ref }}",
-              "github_token_frontend": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_FRONTEND }}",
-              "github_token_nginx": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_NGINX }}"
-            }' \
+            --extra-vars "@/tmp/ansible_vars.json" \
             --tags "deploy-frontend,reload-nginx"
+
+      - name: Remove extra-vars file
+        if: always()
+        run: rm -f /tmp/ansible_vars.json

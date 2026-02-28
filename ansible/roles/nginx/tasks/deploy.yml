@@ -27,11 +27,21 @@
     - deploy-all
 
 - name: Pull nginx configuration from GitHub
-  ansible.builtin.git:
-    repo: "https://{{ github_token_nginx | mandatory('github_token_nginx must be provided') }}@github.com/{{ github_owner }}/{{ service_repo_names.nginx }}.git"
-    dest: "{{ deployment_paths.src_dir }}/{{ service_repo_names.nginx }}"
-    version: "{{ nginx_ref | mandatory('nginx_ref must be provided') }}"
-    force: yes
+  # git -c によるインメモリ認証設定を使用。.git/config へのトークン書き込みを防ぐ
+  ansible.builtin.shell: |
+    set -e
+    DEST="{{ deployment_paths.src_dir }}/{{ service_repo_names.nginx }}"
+    REPO_URL="https://github.com/{{ github_owner }}/{{ service_repo_names.nginx }}.git"
+    TOKEN_REWRITE="url.https://x-access-token:{{ github_token_nginx }}@github.com/.insteadOf=https://github.com/"
+
+    if [ -d "${DEST}/.git" ]; then
+      git -C "${DEST}" -c "${TOKEN_REWRITE}" fetch --depth 1 origin "{{ nginx_ref | mandatory('nginx_ref must be provided') }}"
+      git -C "${DEST}" reset --hard FETCH_HEAD
+    else
+      git -c "${TOKEN_REWRITE}" clone --depth 1 --branch "{{ nginx_ref | mandatory('nginx_ref must be provided') }}" \
+        "${REPO_URL}" "${DEST}"
+    fi
+  no_log: true
   become: yes
   tags:
     - nginx

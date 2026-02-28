@@ -1,0 +1,63 @@
+---
+# サーバー再起動時の自動起動サービスをセットアップ
+# secrets-api は restart: no のため、systemd 経由で起動順序を制御する
+
+- name: Ensure scripts directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.deployment_dir }}/scripts"
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  tags:
+    - setup-startup-service
+
+- name: Deploy startup script
+  ansible.builtin.template:
+    src: startup.sh.j2
+    dest: "{{ deployment_paths.deployment_dir }}/scripts/startup.sh"
+    mode: '0755'
+    owner: root
+    group: root
+  tags:
+    - setup-startup-service
+
+- name: Deploy systemd service unit
+  ansible.builtin.template:
+    src: art-gallery.service.j2
+    dest: /etc/systemd/system/art-gallery.service
+    mode: '0644'
+    owner: root
+    group: root
+  register: systemd_unit_result
+  tags:
+    - setup-startup-service
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: yes
+  when: systemd_unit_result.changed
+  tags:
+    - setup-startup-service
+
+- name: Enable art-gallery service (auto-start on server reboot)
+  ansible.builtin.systemd:
+    name: art-gallery
+    enabled: yes
+    daemon_reload: yes
+  tags:
+    - setup-startup-service
+
+- name: Verify service is enabled
+  ansible.builtin.command: systemctl is-enabled art-gallery
+  register: service_enabled_result
+  failed_when: service_enabled_result.stdout != 'enabled'
+  changed_when: false
+  tags:
+    - setup-startup-service
+
+- name: Show service status
+  ansible.builtin.debug:
+    msg: "art-gallery.service is {{ service_enabled_result.stdout }}. Server reboot protection is active."
+  tags:
+    - setup-startup-service

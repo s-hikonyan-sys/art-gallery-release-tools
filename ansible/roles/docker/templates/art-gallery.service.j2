@@ -1,0 +1,30 @@
+[Unit]
+Description=Art Gallery Application Services
+Documentation=https://github.com/{{ github_owner }}/art-gallery-release-tools
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# 起動: startup.sh で secrets-api → postgres → backend → nginx の順に起動
+ExecStart={{ deployment_paths.deployment_dir }}/scripts/startup.sh
+
+# 停止: compose down で全コンテナを停止
+ExecStop=/usr/bin/docker compose -f {{ deployment_paths.deployment_dir }}/docker-compose.yml down
+
+# 起動タイムアウト: secrets-api ヘルスチェック待機 (最大60秒) + 余裕分
+TimeoutStartSec=120
+TimeoutStopSec=60
+
+# ログを journald へ出力
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=art-gallery
+
+User=root
+
+[Install]
+WantedBy=multi-user.target
