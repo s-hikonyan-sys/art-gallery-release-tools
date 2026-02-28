@@ -42,9 +42,9 @@ all:
           database_user: artuser
 
           # Dockerイメージ名
-          # nginx は公式イメージ（nginx:alpine）を使用するため GHCR 登録不要
           image_names:
             postgres: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.postgres }}"
             backend: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.backend }}"
             frontend: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.frontend }}"
+            nginx: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.nginx }}"
             secrets: "{{ ghcr_base_registry }}/{{ github_owner }}/{{ service_repo_names.secrets }}"

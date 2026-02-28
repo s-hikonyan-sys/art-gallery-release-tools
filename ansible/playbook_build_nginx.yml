@@ -1,0 +1,15 @@
+---
+# nginx コンテナイメージのビルドプレイブック
+# nginx:alpine + entrypoint.sh (backend の /etc/hosts 解決用)
+
+- name: Build nginx container image
+  hosts: "{{ target_hosts }}"
+  become: false
+  tasks:
+    - name: Build nginx image
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: build/nginx
+      tags:
+        - docker
+        - build-nginx

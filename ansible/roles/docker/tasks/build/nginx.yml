@@ -1,0 +1,65 @@
+---
+# Nginx コンテナイメージのビルド
+# nginx:alpine + entrypoint.sh
+
+# === 準備 ===
+- name: Create temporary build directory for nginx
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: nginx-build
+  register: nginx_build_dir
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-nginx
+
+- name: Copy nginx Dockerfile to temporary directory
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/roles/nginx/internal/Dockerfile"
+    dest: "{{ nginx_build_dir.path }}/Dockerfile"
+    mode: '0644'
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-nginx
+
+- name: Copy nginx entrypoint.sh to temporary directory
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/roles/nginx/internal/entrypoint.sh"
+    dest: "{{ nginx_build_dir.path }}/entrypoint.sh"
+    mode: '0755'
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-nginx
+
+# === ビルド ===
+- name: Build nginx container image
+  community.docker.docker_image:
+    name: "{{ image_names.nginx | mandatory('image_names.nginx must be set in inventory') }}"
+    tag: "{{ nginx_image_tag | mandatory('nginx_image_tag must be provided via extra-vars') }}"
+    build:
+      path: "{{ nginx_build_dir.path }}"
+      dockerfile: Dockerfile
+      pull: yes
+    source: build
+    state: present
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-nginx
+
+# === 後処理 ===
+- name: Remove temporary build directory for nginx
+  ansible.builtin.file:
+    path: "{{ nginx_build_dir.path }}"
+    state: absent
+  tags:
+    - docker
+    - build-all
+    - build
+    - build-nginx

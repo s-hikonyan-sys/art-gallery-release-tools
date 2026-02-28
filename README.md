@@ -36,12 +36,13 @@ art-gallery-release-tools/
 │   └── workflows/
 │       ├── build_backend.yml     # イメージビルド（workflow_dispatch）
 │       ├── build_database.yml
+│       ├── build_nginx.yml       # nginx イメージ（nginx:alpine + entrypoint）
 │       ├── build_secrets.yml
 │       ├── deploy_backend.yml    # コード反映・コンテナ再起動（workflow_dispatch）
 │       ├── deploy_database.yml
 │       ├── deploy_secrets.yml
 │       ├── deploy_frontend.yml        # Artifact 展開 + Nginx リロード（CI 自動トリガー）
-│       ├── deploy_nginx.yml           # nginx.conf 更新 + Nginx リロード（CI 自動トリガー）
+│       ├── deploy_nginx.yml           # nginx.conf 更新 + Nginx リロード（手動）
 │       ├── reload_nginx.yml           # Nginx ホットリロードのみ（手動）
 │       └── setup_startup_service.yml  # サーバー再起動時の自動起動サービス設定（手動）
 └── ansible/
@@ -67,6 +68,7 @@ art-gallery-release-tools/
     │   ├── frontend/
     │   │   └── tasks/            # deploy.yml（Artifact DL + 展開）
     │   ├── nginx/
+    │   │   ├── internal/         # Dockerfile, entrypoint.sh（イメージビルド用）
     │   │   └── tasks/            # deploy.yml（git pull + reload） / reload.yml（reload のみ）
     │   └── docker/
     │       ├── tasks/            # deploy_compose.yml / setup_startup_service.yml

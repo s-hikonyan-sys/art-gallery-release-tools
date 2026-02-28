@@ -68,7 +68,7 @@ services:
   # ビルド済みファイルは ./dist/frontend に出力され、nginxコンテナでボリュームマウントされる
 
   nginx:
-    image: "nginx:{{ base_image_versions.nginx | mandatory('base_image_versions.nginx must be set') }}"
+    image: "{{ image_names.nginx | mandatory('image_names.nginx must be set in inventory') }}:{{ nginx_image_tag | mandatory('nginx_image_tag must be provided via extra-vars') }}"
     container_name: "{{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }}"
     ports:
       - "{{ nginx_http_external_port | mandatory('nginx_http_external_port must be set in inventory') }}:80"

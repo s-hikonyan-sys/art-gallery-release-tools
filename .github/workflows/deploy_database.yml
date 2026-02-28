@@ -84,6 +84,7 @@ jobs:
             "database_ref": "${{ env.DATABASE_REF }}",
             "backend_image_tag": "${{ env.RELEASE_VERSION }}",
             "postgres_image_tag": "${{ env.RELEASE_VERSION }}",
+            "nginx_image_tag": "${{ env.RELEASE_VERSION }}",
             "database_target_version": "${{ github.event.inputs.database_target_version }}",
             "github_token_database": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_DATABASE }}"
           }
