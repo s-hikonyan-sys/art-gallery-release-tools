@@ -27,7 +27,7 @@ docker compose -f "${COMPOSE_FILE}" up -d "${SECRETS_CONTAINER}"
 # --- 2. secrets-api のヘルスチェックが通るまで待機 ---
 log "Waiting for secrets-api to become healthy (max ${HEALTH_RETRIES} retries)..."
 for i in $(seq 1 "${HEALTH_RETRIES}"); do
-    STATUS=$(docker inspect --format='{{.State.Health.Status}}' "${SECRETS_CONTAINER}" 2>/dev/null || echo "missing")
+    STATUS=$(docker inspect --format='{% raw %}{{.State.Health.Status}}{% endraw %}' "${SECRETS_CONTAINER}" 2>/dev/null || echo "missing")
 
     if [ "${STATUS}" = "healthy" ]; then
         log "secrets-api is healthy."

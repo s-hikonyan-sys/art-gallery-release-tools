@@ -1,0 +1,19 @@
+---
+# Nginx ホットリロード専用プレイブック
+# nginx.conf の変更を伴わない場合に nginx -s reload のみを実行する
+# 主な用途:
+#   - frontend デプロイ後の手動確認・再試行
+#   - deploy_frontend.yml が失敗した際のリカバリ
+#   - nginx コンテナの動作確認
+
+- name: Reload Nginx (hot reload only)
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Reload nginx (nginx -t check + nginx -s reload)
+      ansible.builtin.include_role:
+        name: nginx
+        tasks_from: reload
+      tags:
+        - reload-nginx
