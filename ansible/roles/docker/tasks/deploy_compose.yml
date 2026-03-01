@@ -2,6 +2,37 @@
 # docker-compose.ymlのデプロイ
 # 環境に応じたテンプレートを使用して生成します
 
+- name: Load current versions from server
+  ansible.builtin.slurp:
+    src: "{{ deployment_paths.deployment_dir }}/current_versions.yml"
+  register: current_versions_slurp
+  failed_when: false
+  tags: [docker, deploy-compose, deploy-all]
+
+- name: Set current versions fact
+  ansible.builtin.set_fact:
+    current_versions: "{{ (current_versions_slurp.content | b64decode | from_yaml) if (current_versions_slurp.content is defined and current_versions_slurp.content != '') else {} }}"
+  tags: [docker, deploy-compose, deploy-all]
+
+- name: Resolve final versions
+  ansible.builtin.set_fact:
+    resolved_secrets_version: "{{ secrets_version | default(current_versions.secrets_version | default(none)) }}"
+    resolved_postgres_version: "{{ postgres_image_tag | default(current_versions.postgres_version | default(none)) }}"
+    resolved_backend_version: "{{ backend_image_tag | default(current_versions.backend_version | default(none)) }}"
+    resolved_nginx_version: "{{ nginx_image_tag | default(current_versions.nginx_version | default(none)) }}"
+  tags: [docker, deploy-compose, deploy-all]
+
+- name: Verify all versions are resolved
+  ansible.builtin.fail:
+    msg: "Version for {{ item.key }} must be provided via extra-vars or existing current_versions.yml"
+  when: item.value is none
+  loop:
+    - { key: 'secrets_version', value: "{{ resolved_secrets_version }}" }
+    - { key: 'postgres_image_tag', value: "{{ resolved_postgres_version }}" }
+    - { key: 'backend_image_tag', value: "{{ resolved_backend_version }}" }
+    - { key: 'nginx_image_tag', value: "{{ resolved_nginx_version }}" }
+  tags: [docker, deploy-compose, deploy-all]
+
 - name: Deploy docker-compose.yml from template
   ansible.builtin.template:
     src: docker-compose.yml.j2
@@ -13,3 +44,16 @@
     - docker
     - deploy-compose
     - deploy-all
+
+- name: Update current_versions.yml on server
+  ansible.builtin.copy:
+    content: |
+      secrets_version: "{{ resolved_secrets_version }}"
+      postgres_version: "{{ resolved_postgres_version }}"
+      backend_version: "{{ resolved_backend_version }}"
+      nginx_version: "{{ resolved_nginx_version }}"
+    dest: "{{ deployment_paths.deployment_dir }}/current_versions.yml"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: '0644'
+  tags: [docker, deploy-compose, deploy-all]
