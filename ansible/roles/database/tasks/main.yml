@@ -1,4 +1,20 @@
 ---
+#DEBUG
+- name: DEBUG - Check if src directory exists at the very beginning of database role
+  ansible.builtin.stat:
+    path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}"
+  register: start_stat
+
+- name: DEBUG - Print src directory status at start
+  ansible.builtin.debug:
+    msg: 
+      - "Path: {{ start_stat.stat.path | default('N/A') }}"
+      - "Exists: {{ start_stat.stat.exists }}"
+      - "Owner: {{ start_stat.stat.pw_name | default('N/A') }}"
+      - "Is Directory: {{ start_stat.stat.isdir | default('N/A') }}"
+  tags: [deploy-database-code]
+#DEBUG END
+
 - name: Deploy secrets_api_config.sh for database entrypoint
   ansible.builtin.template:
     src: secrets_api_config.sh.j2

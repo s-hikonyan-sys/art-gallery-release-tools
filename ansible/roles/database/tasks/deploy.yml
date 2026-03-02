@@ -18,6 +18,20 @@
     group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
   tags: [deploy-database-code]
   
+# DEBUG
+- name: DEBUG - Detailed check of destination directory before git clone
+  ansible.builtin.shell: |
+    ls -laR "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}" || echo "Directory does not exist"
+  register: dir_check
+  become: yes # root権限で見に行く
+  tags: [deploy-database-code]
+
+- name: DEBUG - Print directory content details
+  ansible.builtin.debug:
+    var: dir_check.stdout_lines
+  tags: [deploy-database-code]
+# DEBUG END
+
 - name: Deploy postgres-entrypoint.sh and migrations from GitHub
   # git -c によるインメモリ認証設定を使用。.git/config へのトークン書き込みを防ぐ
   ansible.builtin.shell: |
