@@ -19,16 +19,25 @@
   tags: [deploy-database-code]
   
 # DEBUG
-- name: DEBUG - Detailed check of destination directory before git clone
-  ansible.builtin.shell: |
-    ls -laR "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}" || echo "Directory does not exist"
-  register: dir_check
-  become: yes # root権限で見に行く
+- name: Stat src directory before git operation
+  ansible.builtin.stat:
+    path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}"
+  register: before_git_stat
   tags: [deploy-database-code]
 
-- name: DEBUG - Print directory content details
+- name: DEBUG - Check for .git directory specifically
+  ansible.builtin.stat:
+    path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}/.git"
+  register: dot_git_stat
+  tags: [deploy-database-code]
+
+- name: DEBUG - Print detailed status before git operation
   ansible.builtin.debug:
-    var: dir_check.stdout_lines
+    msg:
+      - "DEST Path: {{ before_git_stat.stat.path }}"
+      - "Directory Exists: {{ before_git_stat.stat.exists }}"
+      - ".git Directory Exists: {{ dot_git_stat.stat.exists }}"
+      - "Is Directory: {{ before_git_stat.stat.isdir | default('false') }}"
   tags: [deploy-database-code]
 # DEBUG END
 
