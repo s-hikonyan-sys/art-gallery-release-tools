@@ -33,7 +33,6 @@
       git -c "${TOKEN_REWRITE}" clone --depth 1 --branch "{{ database_ref | mandatory('database_ref must be provided') }}" \
         "${REPO_URL}" "${DEST}"
     fi
-  no_log: true
   become: yes
   become_user: "{{ app_user }}"
   tags:
