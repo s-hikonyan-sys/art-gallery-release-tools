@@ -8,8 +8,13 @@ on:
         required: false
         type: boolean
         default: false
+      run_deploy_code: # ← 追加
+        description: '2. [デプロイ:コード] サーバーのコード(scripts, migrations)を更新'
+        required: false
+        type: boolean
+        default: false
       run_deploy_migrations:
-        description: '2. [マイグレーション] DB マイグレーションを実行'
+        description: '3. [マイグレーション] DB マイグレーションを実行'
         required: false
         type: boolean
         default: false
@@ -98,10 +103,15 @@ jobs:
           if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
             TAGS="deploy-compose,update-postgres-image"
           fi
+          
+          if [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
+            [ -n "$TAGS" ] && TAGS="$TAGS,"
+            TAGS="${TAGS}deploy-database-code" # コードデプロイのみ
+          fi
 
           if [ "${{ github.event.inputs.run_deploy_migrations }}" == "true" ]; then
             [ -n "$TAGS" ] && TAGS="$TAGS,"
-            TAGS="${TAGS}deploy-database-code,database-migration"
+            TAGS="${TAGS}database-migration" # マイグレーション実行のみ
           fi
 
           cd ansible

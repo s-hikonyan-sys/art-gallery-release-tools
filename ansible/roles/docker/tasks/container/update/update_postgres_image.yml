@@ -1,6 +1,24 @@
 ---
 # Postgres コンテナのイメージを更新し、再作成・再起動する
 
+- name: Ensure Secrets API is healthy before updating Postgres
+  ansible.builtin.shell: |
+    STATUS=$(docker inspect --format='{{ "{{.State.Health.Status}}" }}' {{ container_names.secrets }} 2>/dev/null || echo "missing")
+    if [ "$STATUS" != "healthy" ]; then
+      cd {{ deployment_paths.deployment_dir }}
+      docker compose up -d secrets-api
+      # ヘルスチェック待ち（最大60秒）
+      for i in {1..12}; do
+        if [ "$(docker inspect --format='{{ "{{.State.Health.Status}}" }}' {{ container_names.secrets }} 2>/dev/null)" == "healthy" ]; then
+          exit 0
+        fi
+        sleep 5
+      done
+      exit 1
+    fi
+  changed_when: false
+  tags: [docker, update-postgres-image]
+
 - name: Pull latest Postgres image and recreate container
   community.docker.docker_compose_v2:    
     project_src: "{{ deployment_paths.deployment_dir }}"

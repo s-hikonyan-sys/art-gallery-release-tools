@@ -1,6 +1,43 @@
 ---
 # バックエンドコンテナのイメージを更新し、再作成・再起動する
 
+# バックエンドの起動には Secrets API と Database コンテナが必要
+- name: Ensure Secrets API is healthy
+  ansible.builtin.shell: |
+    STATUS=$(docker inspect --format='{{ "{{.State.Health.Status}}" }}' {{ container_names.secrets }} 2>/dev/null || echo "missing")
+    if [ "$STATUS" != "healthy" ]; then
+      cd {{ deployment_paths.deployment_dir }}
+      docker compose up -d secrets-api
+      # ヘルスチェック待ち（最大60秒）
+      for i in {1..12}; do
+        if [ "$(docker inspect --format='{{ "{{.State.Health.Status}}" }}' {{ container_names.secrets }} 2>/dev/null)" == "healthy" ]; then
+          exit 0
+        fi
+        sleep 5
+      done
+      exit 1
+    fi
+  changed_when: false
+  tags: [docker, update-backend-image]
+
+- name: Ensure Database is healthy
+  ansible.builtin.shell: |
+    STATUS=$(docker inspect --format='{{ "{{.State.Health.Status}}" }}' {{ container_names.postgres }} 2>/dev/null || echo "missing")
+    if [ "$STATUS" != "healthy" ]; then
+      cd {{ deployment_paths.deployment_dir }}
+      docker compose up -d postgres
+      # ヘルスチェック待ち
+      for i in {1..12}; do
+        if [ "$(docker inspect --format='{{ "{{.State.Health.Status}}" }}' {{ container_names.postgres }} 2>/dev/null)" == "healthy" ]; then
+          exit 0
+        fi
+        sleep 5
+      done
+      exit 1
+    fi
+  changed_when: false
+  tags: [docker, update-backend-image]
+
 - name: Pull latest Backend image and recreate container
   community.docker.docker_compose_v2:
     project_src: "{{ deployment_paths.deployment_dir }}"

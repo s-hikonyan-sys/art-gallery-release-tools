@@ -18,29 +18,6 @@
     group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
   tags: [deploy-database-code]
   
-# DEBUG
-- name: Stat src directory before git operation
-  ansible.builtin.stat:
-    path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}"
-  register: before_git_stat
-  tags: [deploy-database-code]
-
-- name: DEBUG - Check for .git directory specifically
-  ansible.builtin.stat:
-    path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.postgres }}/.git"
-  register: dot_git_stat
-  tags: [deploy-database-code]
-
-- name: DEBUG - Print detailed status before git operation
-  ansible.builtin.debug:
-    msg:
-      - "DEST Path: {{ before_git_stat.stat.path }}"
-      - "Directory Exists: {{ before_git_stat.stat.exists }}"
-      - ".git Directory Exists: {{ dot_git_stat.stat.exists }}"
-      - "Is Directory: {{ before_git_stat.stat.isdir | default('false') }}"
-  tags: [deploy-database-code]
-# DEBUG END
-
 - name: Deploy postgres-entrypoint.sh and migrations from GitHub
   # git -c によるインメモリ認証設定を使用。.git/config へのトークン書き込みを防ぐ
   ansible.builtin.shell: |
