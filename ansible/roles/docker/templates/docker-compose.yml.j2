@@ -32,6 +32,7 @@ services:
     volumes:
       - {{ docker_volume_postgres_data | mandatory('docker_volume_postgres_data must be set in inventory') }}:/var/lib/postgresql/data
       - ./scripts/postgres-entrypoint.sh:/app/scripts/postgres-entrypoint.sh:ro
+      - ./scripts/secrets_api_config.sh:/app/secrets_api_config.sh:ro
       - ./conf/database/config:/app/config:rw
       - ./src/{{ service_repo_names.postgres }}/migrations:/app/migrations:ro
       - ./conf/secrets/tokens:/app/tokens:ro
