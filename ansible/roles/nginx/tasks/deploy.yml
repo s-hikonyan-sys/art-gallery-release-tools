@@ -19,8 +19,8 @@
     path: "{{ deployment_paths.logs_dir }}/nginx"
     state: directory
     mode: '0755'
-    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
-    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
   tags:
     - nginx
     - deploy-nginx
@@ -54,8 +54,8 @@
     dest: "{{ deployment_paths.conf_dir }}/nginx/nginx.conf"
     remote_src: yes
     mode: '0644'
-    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
-    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
   tags:
     - nginx
     - deploy-nginx

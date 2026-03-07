@@ -1,23 +1,4 @@
----
-- name: Ensure database scripts directory exists  
-  ansible.builtin.file:    
-    path: "{{ deployment_paths.deployment_dir }}/scripts"    
-    state: directory    
-    mode: '0755'    
-    owner: "{{ app_user }}"    
-    group: "{{ app_user }}"
-  tags:    
-    - deploy-database-code
-
-- name: Ensure database config directory exists
-  ansible.builtin.file:
-    path: "{{ deployment_paths.conf_dir }}/database/config"
-    state: directory
-    mode: '0700'
-    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
-    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
-  tags: [deploy-database-code]
-  
+---  
 - name: Deploy postgres-entrypoint.sh and migrations from GitHub
   # git -c によるインメモリ認証設定を使用。.git/config へのトークン書き込みを防ぐ
   ansible.builtin.shell: |

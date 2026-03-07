@@ -19,8 +19,8 @@
     path: "{{ deployment_paths.remote_temp_dir }}"
     state: directory
     mode: '0755'
-    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
-    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
   tags:
     - frontend
     - deploy-frontend
@@ -48,8 +48,8 @@
     src: "{{ deployment_paths.remote_temp_dir }}/frontend-dist.zip"
     dest: "{{ deployment_paths.dist_dir }}/frontend"
     remote_src: yes
-    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
-    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
   tags:
     - frontend
     - deploy-frontend

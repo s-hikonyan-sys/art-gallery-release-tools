@@ -20,9 +20,10 @@ services:
     image: "{{ image_names.postgres | mandatory('image_names.postgres must be set in inventory') }}:{{ resolved_postgres_version }}"
     container_name: "{{ container_names.postgres | mandatory('container_names.postgres must be set in inventory') }}"
     entrypoint: ["/app/scripts/postgres-entrypoint.sh"]
-    depends_on:
-      secrets-api:
-        condition: service_healthy
+    # secretsコンテナとpostgresコンテナの関係性は深いが、secretsコンテナとpostgresコンテナの機能は異なるため、依存関係を削除
+    #depends_on:
+    #  secrets-api:
+    #    condition: service_healthy
     environment:
       POSTGRES_DB: "{{ database_name | mandatory('database_name must be set in inventory') }}"
       POSTGRES_USER: "{{ database_user | mandatory('database_user must be set in inventory') }}"
@@ -51,11 +52,12 @@ services:
     # ビルドコンテキストはサーバー上に残らない
     container_name: "{{ container_names.backend | mandatory('container_names.backend must be set in inventory') }}"
     # 環境変数は使用しない。設定ファイル（config.yaml, secrets.yaml.encrypted）で管理
-    depends_on:
-      postgres:
-        condition: service_healthy
-      secrets-api:
-        condition: service_healthy
+    # backendコンテナとsecretsコンテナおよびdatabaseコンテナの関係性は深いが、それらのコンテナとは機能が異なるため、依存関係を削除
+    #depends_on:
+    #  postgres:
+    #    condition: service_healthy
+    #  secrets-api:
+    #    condition: service_healthy
     volumes:
       - ./conf/backend/config:/app/config:ro
       - ./logs/backend:/app/logs:rw
