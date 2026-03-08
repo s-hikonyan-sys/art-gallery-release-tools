@@ -1,6 +1,14 @@
 ---
 # バックエンドコンテナのイメージを更新し、再作成・再起動する
 
+# secretsコンテナの状態を一度クリーンにしてトークンを発行させる（冪等性の担保の）
+- name: Clean up existing docker-compose services and volumes (for CI stability)
+  ansible.builtin.shell: |
+    cd {{ deployment_paths.deployment_dir }}
+    docker compose down --remove-orphans -v || true # エラーを無視して続行
+  changed_when: false
+  tags: [docker, update-backend-image]
+
 # バックエンドの起動には Secrets API と Database コンテナが必要
 - name: Ensure Secrets API is healthy
   ansible.builtin.shell: |
