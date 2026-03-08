@@ -45,6 +45,7 @@ services:
     restart: unless-stopped
     networks:
       - {{ docker_network_name | mandatory('docker_network_name must be set in inventory') }}
+    command: postgres -c 'log_min_duration_statement=0' -c 'log_connections=on' -c 'log_disconnections=on' -c 'log_lock_waits=on' -c 'log_temp_files=0' -c 'log_autovacuum_min_duration=0' -c 'log_checkpoints=on' -c 'log_executor_stats=on' -c 'log_parser_stats=on' -c 'log_planner_stats=on' -c 'log_statement=all' -c 'log_hostname=on' -c 'log_line_prefix=%t %h:%p:%l %u@%d %r '
 
   backend:
     image: "{{ image_names.backend | mandatory('image_names.backend must be set in inventory') }}:{{ resolved_backend_version }}"
