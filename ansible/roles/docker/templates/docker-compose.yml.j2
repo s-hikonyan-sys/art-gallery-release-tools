@@ -57,9 +57,10 @@ services:
       secrets-api:
         condition: service_healthy
     volumes:
-      - ./logs/backend:/app/logs:rw
+      - ./conf/backend/config:/conf/backend/config:ro
+      - ./logs/backend:/logs/backend:rw
       - ./src/{{ service_repo_names.backend }}:/app
-      - ./conf/secrets/tokens:/app/tokens:ro
+      - ./conf/secrets/tokens:/tokens/backend:ro
     restart: unless-stopped
     networks:
       - {{ docker_network_name | mandatory('docker_network_name must be set in inventory') }}
