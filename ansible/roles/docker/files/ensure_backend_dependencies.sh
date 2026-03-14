@@ -34,28 +34,28 @@ get_container_health_status() {
   docker inspect --format='{{.State.Health.Status}}' "${container_name}" 2>/dev/null || echo "missing"
 }
 
-# Usage: wait_for_healthy "container_name" "max_retries" "interval"
-# 引数: ${1} - コンテナ名
-#       ${2} - ヘルスチェックの最大試行回数
-#       ${3} - ヘルスチェックの待機間隔（秒）
-# 戻り値: 0 (healthyになった), 1 (healthyにならなかった)
-wait_for_healthy() {
-  local -r container_name="${1}"
-  local -r max_retries="${2}"
-  local -r interval="${3}"
+# Usage: wait_for_condition "description" "check_command" "max_retries" "interval"
+# 引数: ${1} - 待機対象の説明（ログ出力用）
+#       ${2} - 条件をチェックするコマンド文字列。成功時に終了コード0を返すこと
+#       ${3} - 最大試行回数
+#       ${4} - 待機間隔（秒）
+# 戻り値: 0 (条件が満たされた), 1 (条件が満たされなかった)
+wait_for_condition() {
+  local -r description="${1}"
+  local -r check_command="${2}"
+  local -r max_retries="${3}"
+  local -r interval="${4}"
 
   for ((i = 1; i <= max_retries; i++)); do
-    local status
-    status=$(get_container_health_status "${container_name}")
-    if [ "${status}" == "healthy" ]; then
-      log_info "${container_name} is healthy."
+    if eval "${check_command}"; then
+      log_info "${description} is ready."
       return 0 # 正常終了
     fi
-    log_info "Waiting for ${container_name} to become healthy (attempt ${i}/${max_retries}, status: ${status})..."
+    log_info "Waiting for ${description} (attempt ${i}/${max_retries})..."
     sleep "${interval}"
   done
 
-  log_error "${container_name} did not become healthy after ${max_retries} attempts."
+  log_error "${description} did not become ready after ${max_retries} attempts."
   return 1 # 異常終了
 }
 
@@ -82,7 +82,10 @@ ensure_service_healthy() {
   eval "${up_command}"
 
   # ヘルスチェックを待機
-  if ! wait_for_healthy "${container_name}" "${MAX_HEALTH_CHECK_RETRIES}" "${HEALTH_CHECK_INTERVAL}"; then
+  if ! wait_for_condition "${container_name} health" \
+    "[ \"\$(get_container_health_status '${container_name}')\" = 'healthy' ]" \
+    "${MAX_HEALTH_CHECK_RETRIES}" \
+    "${HEALTH_CHECK_INTERVAL}"; then
     log_error "Failed to ensure ${container_name} is healthy."
     exit 1
   fi
@@ -122,6 +125,16 @@ rm -f ./conf/secrets/tokens/backend_token.txt || true
 # トークンが削除されたため、Secrets APIは必ず起動処理で新しいトークンを生成する。
 # （docker compose up はサービス名で指定。compose内のサービス名は secrets-api / postgres）
 ensure_service_healthy "${SECRETS_CONTAINER_NAME}" "docker compose up -d secrets-api"
+
+# Secrets APIがhealthyになった後、バックエンド用トークンファイルが生成されるまで待機
+readonly BACKEND_TOKEN_FILE_PATH="./conf/secrets/tokens/backend_token.txt"
+if ! wait_for_condition "backend token file (${BACKEND_TOKEN_FILE_PATH})" \
+  "[ -s \"${BACKEND_TOKEN_FILE_PATH}\" ]" \
+  "${MAX_HEALTH_CHECK_RETRIES}" \
+  "${HEALTH_CHECK_INTERVAL}"; then
+  log_error "Backend token file was not created by Secrets API."
+  exit 1
+fi
 
 
 # Step 3: Databaseがhealthyであることを確認し、必要であれば起動する
