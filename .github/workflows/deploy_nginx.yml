@@ -56,11 +56,8 @@ jobs:
             "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
             "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
             "nginx_ref": "${{ env.NGINX_REF }}",
-            "github_token_nginx": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_NGINX }}",
-            "backend_image_tag": "${{ env.RELEASE_VERSION }}",
-            "postgres_image_tag": "${{ env.RELEASE_VERSION }}",
-            "secrets_version": "${{ env.RELEASE_VERSION }}",
-            "nginx_image_tag": "${{ env.RELEASE_VERSION }}"
+            "nginx_image_tag": "${{ env.RELEASE_VERSION }}",
+            "github_token_nginx": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_NGINX }}"
           }
           VARS_EOF
           chmod 600 /tmp/ansible_vars.json
