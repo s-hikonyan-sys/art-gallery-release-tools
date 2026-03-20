@@ -66,16 +66,19 @@
     docker exec {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} nginx -t
   register: nginx_test_result
   failed_when: nginx_test_result.rc != 0
+  when: "'reload-nginx' in ansible_run_tags"
   tags:
     - nginx
-    - deploy-nginx
     - reload-nginx
     - deploy-all
 
 - name: Reload nginx (hot reload, no downtime)
   ansible.builtin.shell: |
     docker exec {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} nginx -s reload
-  when: nginx_test_result.rc == 0
+  when:
+    - "'reload-nginx' in ansible_run_tags"
+    - nginx_test_result is defined
+    - nginx_test_result.rc == 0
   tags:
     - nginx
     - reload-nginx

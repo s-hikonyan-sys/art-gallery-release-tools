@@ -3,6 +3,16 @@ name: Deploy Nginx
 on:
   workflow_dispatch:
     inputs:
+      run_deploy_image:
+        description: '1. [デプロイ:イメージ] nginxコンテナのイメージを更新 (Pull & Recreate)'
+        required: false
+        type: boolean
+        default: false
+      run_deploy_code:
+        description: '2. [デプロイ:設定] nginxの設定ファイルを更新 (Git Pull & Deploy)'
+        required: false
+        type: boolean
+        default: false
       release_version:
         description: 'デプロイ対象のリリースバージョン (例: v1.0.0。未指定時はリポジトリ変数を参照)'
         required: false
@@ -39,6 +49,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ansible
 
+      - name: Validate Inputs
+        run: |
+          if [ "${{ github.event.inputs.run_deploy_image }}" != "true" ] && [ "${{ github.event.inputs.run_deploy_code }}" != "true" ]; then
+            echo "::error::'run_deploy_image' または 'run_deploy_code' の少なくとも一方は 'true' に設定してください。"
+            exit 1
+          fi
+
       - name: Setup SSH for Production Deployment
         run: |
           mkdir -p ~/.ssh
@@ -55,9 +72,9 @@ jobs:
             "prod_host": "${{ vars.PROD_HOST }}",
             "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
             "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
-            "nginx_ref": "${{ env.NGINX_REF }}",
-            "nginx_image_tag": "${{ env.RELEASE_VERSION }}",
-            "github_token_nginx": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_NGINX }}"
+            "nginx_ref": "${{ github.event.inputs.nginx_ref }}",
+            "nginx_image_tag": "${{ github.event.inputs.release_version || vars.RELEASE_VERSION }}",
+            "github_token_nginx": "${{ secrets['GH_TOKEN_FOR_ART_GALLERY_NGINX'] }}"
           }
           VARS_EOF
           chmod 600 /tmp/ansible_vars.json
@@ -65,10 +82,26 @@ jobs:
       - name: Deploy Nginx Configuration
         run: |
           cd ansible
+
+          TAGS=""
+          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
+            TAGS="deploy-compose,update-nginx-image"
+          fi
+
+          if [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
+            [ -n "$TAGS" ] && TAGS="$TAGS,"
+            TAGS="${TAGS}deploy-nginx"
+          fi
+
+          if [ -z "$TAGS" ]; then
+            echo "::error::デプロイのオプションが選択されていません"
+            exit 1
+          fi
+
           ansible-playbook playbook_deploy_nginx.yml \
             --inventory inventory/production.yml \
             --extra-vars "@/tmp/ansible_vars.json" \
-            --tags "deploy-nginx,reload-nginx"
+            --tags "$TAGS"
 
       - name: Remove extra-vars file
         if: always()
