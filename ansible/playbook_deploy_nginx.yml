@@ -1,46 +1,65 @@
 ---
-# Nginx 設定デプロイ専用プレイブック
-# nginx.conf を git pull して配置する（リロードは別CI）
+# Nginx デプロイ専用プレイブック
+# 実行順序: 1. コード（設定）デプロイ → 2. コンテナ更新前の前提チェック → 3. docker-compose → 4. イメージ更新
+# リロードは reload_nginx.yml / playbook_reload_nginx.yml を利用
 
 - name: Deploy Nginx Configuration
   hosts: "{{ target_hosts }}"
   become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
 
   tasks:
-    - name: Check frontend dist is present (required by nginx)
-      ansible.builtin.stat:
-        path: "{{ deployment_paths.dist_dir }}/frontend/index.html"
-      register: frontend_index_html
+    # --- 1. コード（設定）デプロイ: ディレクトリ作成・git pull・nginx.conf 配置 ---
+    - name: Deploy nginx config files (source and config)
+      ansible.builtin.include_role:
+        name: nginx
+        tasks_from: deploy
+      when: "'deploy-nginx' in ansible_run_tags"
+      tags:
+        - deploy-nginx
+
+    # --- 2. コンテナ更新前の前提チェック（作成はしない。無ければ fail）---
+    - name: Check prerequisites for nginx container update
+      block:
+        - name: Stat frontend dist (index.html)
+          ansible.builtin.stat:
+            path: "{{ deployment_paths.dist_dir }}/frontend/index.html"
+          register: nginx_prereq_frontend
+
+        - name: Stat nginx.conf on host
+          ansible.builtin.stat:
+            path: "{{ deployment_paths.conf_dir }}/nginx/nginx.conf"
+          register: nginx_prereq_conf
+
+        - name: Fail if frontend dist is missing
+          ansible.builtin.fail:
+            msg: >-
+              Frontendの成果物が見つかりません: {{ deployment_paths.dist_dir }}/frontend/index.html
+              先に Frontend をデプロイしてください（playbook_deploy_frontend.yml を deploy-frontend で実行）。
+          when: not nginx_prereq_frontend.stat.exists
+
+        - name: Fail if nginx config is missing (run code deploy first)
+          ansible.builtin.fail:
+            msg: >-
+              Nginx の設定ファイルが見つかりません: {{ deployment_paths.conf_dir }}/nginx/nginx.conf
+              コンテナを更新する前に、先にコード（設定）デプロイを実行してください（run_deploy_code=true）。
+      when: "'update-nginx-image' in ansible_run_tags"
       tags:
         - update-nginx-image
 
-    - name: Abort nginx deployment when frontend dist is missing
-      ansible.builtin.fail:
-        msg: >-
-          Frontendの成果物が見つかりません: {{ deployment_paths.dist_dir }}/frontend/index.html
-          nginxのデプロイ前に、先にFrontendをデプロイしてください（playbook_deploy_frontend.yml を deploy-frontend で実行）。
-      when: not frontend_index_html.stat.exists
-      tags:
-        - update-nginx-image
-
+    # --- 3. docker-compose.yml 配置 ---
     - name: Deploy docker-compose.yml (generate with resolved versions)
       ansible.builtin.include_role:
         name: docker
         tasks_from: deploy_compose
       tags:
         - deploy-compose
+        - deploy-nginx
         - update-nginx-image
 
+    # --- 4. nginx コンテナのイメージ更新 ---
     - name: Update nginx container image (pull + recreate)
       ansible.builtin.include_role:
         name: docker
         tasks_from: container/update/update_nginx_image
       tags:
         - update-nginx-image
-
-    - name: Deploy nginx config only
-      ansible.builtin.include_role:
-        name: nginx
-        tasks_from: deploy
-      tags:
-        - deploy-nginx

@@ -1,5 +1,5 @@
 ---
-# Nginx 設定ファイルを git pull して配置し、ホットリロードする
+# Nginx 設定ファイルを git pull して配置する（nginx -t / reload は reload-nginx タグ時のみ）
 # イメージのビルドは行わない（公式イメージ + ボリュームマウント構成）
 
 - name: Ensure nginx config directory exists
