@@ -42,6 +42,7 @@
             msg: >-
               Nginx の設定ファイルが見つかりません: {{ deployment_paths.conf_dir }}/nginx/nginx.conf
               コンテナを更新する前に、先にコード（設定）デプロイを実行してください（run_deploy_code=true）。
+          when: not nginx_prereq_conf.stat.exists
       when: "'update-nginx-image' in ansible_run_tags"
       tags:
         - update-nginx-image

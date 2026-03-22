@@ -1,26 +1,19 @@
 ---
 # Nginx 設定ファイルを git pull して配置する（nginx -t / reload は reload-nginx タグ時のみ）
 # イメージのビルドは行わない（公式イメージ + ボリュームマウント構成）
+# git は app_user で実行し、src が root:root にならないようにする
 
-- name: Ensure nginx config directory exists
+- name: Ensure nginx-related directories exist with correct ownership
   ansible.builtin.file:
-    path: "{{ deployment_paths.conf_dir }}/nginx"
+    path: "{{ item }}"
     state: directory
     mode: '0755'
     owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
     group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
-  tags:
-    - nginx
-    - deploy-nginx
-    - deploy-all
-
-- name: Ensure nginx logs directory exists
-  ansible.builtin.file:
-    path: "{{ deployment_paths.logs_dir }}/nginx"
-    state: directory
-    mode: '0755'
-    owner: "{{ app_user }}"
-    group: "{{ app_user }}"
+  loop:
+    - "{{ deployment_paths.conf_dir }}/nginx"
+    - "{{ deployment_paths.src_dir }}/{{ service_repo_names.nginx }}"
+    - "{{ deployment_paths.logs_dir }}/nginx"
   tags:
     - nginx
     - deploy-nginx
@@ -43,6 +36,7 @@
     fi
   no_log: true
   become: yes
+  become_user: "{{ app_user | mandatory('app_user must be set in inventory') }}"
   tags:
     - nginx
     - deploy-nginx
@@ -56,6 +50,7 @@
     mode: '0644'
     owner: "{{ app_user }}"
     group: "{{ app_user }}"
+  become: yes
   tags:
     - nginx
     - deploy-nginx

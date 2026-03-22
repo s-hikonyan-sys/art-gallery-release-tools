@@ -3,13 +3,13 @@ name: Deploy Nginx
 on:
   workflow_dispatch:
     inputs:
-      run_deploy_image:
-        description: '1. [デプロイ:イメージ] nginxコンテナのイメージを更新 (Pull & Recreate)'
+      run_deploy_code:
+        description: '1. [デプロイ:設定] nginxの設定ファイルを更新 (Git Pull & Deploy)'
         required: false
         type: boolean
         default: false
-      run_deploy_code:
-        description: '2. [デプロイ:設定] nginxの設定ファイルを更新 (Git Pull & Deploy)'
+      run_deploy_image:
+        description: '2. [デプロイ:イメージ] nginxコンテナのイメージを更新 (Pull & Recreate)'
         required: false
         type: boolean
         default: false
@@ -52,8 +52,8 @@ jobs:
 
       - name: Validate Inputs
         run: |
-          if [ "${{ github.event.inputs.run_deploy_image }}" != "true" ] && [ "${{ github.event.inputs.run_deploy_code }}" != "true" ]; then
-            echo "::error::'run_deploy_image' または 'run_deploy_code' の少なくとも一方は 'true' に設定してください。"
+          if [ "${{ github.event.inputs.run_deploy_code }}" != "true" ] && [ "${{ github.event.inputs.run_deploy_image }}" != "true" ]; then
+            echo "::error::'run_deploy_code' または 'run_deploy_image' の少なくとも一方は 'true' に設定してください。"
             exit 1
           fi
 
@@ -85,13 +85,13 @@ jobs:
           cd ansible
 
           TAGS=""
-          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
-            TAGS="deploy-compose,update-nginx-image"
+          if [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
+            TAGS="deploy-nginx"
           fi
 
-          if [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
+          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
             [ -n "$TAGS" ] && TAGS="$TAGS,"
-            TAGS="${TAGS}deploy-nginx"
+            TAGS="${TAGS}deploy-compose,update-nginx-image"
           fi
 
           if [ -z "$TAGS" ]; then
