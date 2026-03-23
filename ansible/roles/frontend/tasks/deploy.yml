@@ -28,7 +28,7 @@
 
 - name: Download Frontend Artifact ZIP from GitHub
   ansible.builtin.uri:
-    url: "https://api.github.com/repos/{{ github_owner }}/{{ service_repo_names.frontend }}/actions/artifacts/{{ frontend_artifact_id | mandatory('frontend_artifact_id must be provided') }}/zip"
+    url: "https://api.github.com/repos/{{ github_owner }}/{{ frontend_artifact_repo | default(service_repo_names.frontend) }}/actions/artifacts/{{ frontend_artifact_id | mandatory('frontend_artifact_id must be provided') }}/zip"
     method: GET
     headers:
       Authorization: "Bearer {{ github_token_frontend | mandatory('github_token_frontend must be provided') }}"
