@@ -4,12 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'ビルド対象のリリースバージョン (例: v1.0.0。未指定時はリポジトリ変数を参照)'
+        description: 'ビルドするイメージのタグ (例: v1.0.0。未指定時はリポジトリ変数を参照)'
         required: false
         type: string
       frontend_ref:
-        description: 'ビルドする frontend リポジトリの ref (branch/tag/sha)。未指定時は release_version を使用'
+        description: 'ビルド対象の frontend リポジトリの ref (branch/tag/sha)'
         required: false
+        default: 'main'
         type: string
 
 jobs:
