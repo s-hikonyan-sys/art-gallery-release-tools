@@ -28,29 +28,33 @@ jobs:
           fi
           echo "RELEASE_VERSION=${VERSION}" >> $GITHUB_ENV
 
-      - name: Resolve Frontend Artifact ID from release_version
-        env:
-          GH_TOKEN_FRONTEND: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}
-          GITHUB_OWNER: s-hikonyan-sys
-          RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+      - name: Download Frontend Artifact (runner-side)
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist-${{ env.RELEASE_VERSION }}
+          path: /tmp/frontend-dist
+
+      - name: Create Frontend Artifact ZIP (runner-side)
         run: |
-          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import zipfile
 
-          ARTIFACT_NAME="frontend-dist-${RELEASE_VERSION}"
-          API_URL="https://api.github.com/repos/${GITHUB_OWNER}/art-gallery-release-tools/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100"
+          src_dir = "/tmp/frontend-dist"
+          zip_path = "/tmp/frontend-dist.zip"
 
-          ARTIFACT_ID=$(curl -fsSL \
-            -H "Authorization: Bearer ${GH_TOKEN_FRONTEND}" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "${API_URL}" | python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in d.get('artifacts',[]) if not x.get('expired',False)]; print(a[0]['id'] if a else '')")
+          if not os.path.isdir(src_dir):
+            raise SystemExit(f"missing artifact dir: {src_dir}")
 
-          if [ -z "${ARTIFACT_ID}" ]; then
-            echo "::error::Artifact '${ARTIFACT_NAME}' が見つかりません。release-tools の build_frontend.yml で同じバージョンをビルドしてください。"
-            exit 1
-          fi
+          with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for root, _, files in os.walk(src_dir):
+              for f in files:
+                full = os.path.join(root, f)
+                rel = os.path.relpath(full, src_dir)
+                zf.write(full, rel)
 
-          echo "FRONTEND_ARTIFACT_ID=${ARTIFACT_ID}" >> "$GITHUB_ENV"
+          print(f"wrote: {zip_path}")
+          PY
 
       - name: Install Ansible and dependencies
         run: |
@@ -73,9 +77,7 @@ jobs:
             "prod_host": "${{ vars.PROD_HOST }}",
             "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
             "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
-            "frontend_artifact_id": "${{ env.FRONTEND_ARTIFACT_ID }}",
-            "frontend_artifact_repo": "art-gallery-release-tools",
-            "github_token_frontend": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}"
+            "frontend_artifact_zip_local": "/tmp/frontend-dist.zip"
           }
           VARS_EOF
           chmod 600 /tmp/ansible_vars.json
