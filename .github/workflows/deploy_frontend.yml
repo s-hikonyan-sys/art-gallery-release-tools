@@ -33,6 +33,7 @@ jobs:
         with:
           name: frontend-dist-${{ env.RELEASE_VERSION }}
           path: /tmp/frontend-dist
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Frontend Artifact ZIP (runner-side)
         run: |
