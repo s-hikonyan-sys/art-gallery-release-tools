@@ -1,12 +1,12 @@
 ---
-# バックエンドコンテナの起動
+# Nginx コンテナの起動
 # イメージが存在しない場合はプルを試みます
 
-- name: Start backend container
+- name: Start nginx container
   ansible.builtin.shell: |
     cd {{ deployment_paths.deployment_dir }}
-    docker compose up -d backend
+    docker compose up -d nginx
   become: no
   tags:
     - docker
-    - start-backend
+    - start-nginx

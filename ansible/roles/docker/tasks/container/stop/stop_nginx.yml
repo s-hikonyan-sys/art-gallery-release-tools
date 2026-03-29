@@ -1,0 +1,8 @@
+---
+- name: Stop nginx container
+  ansible.builtin.shell: |
+    cd {{ deployment_paths.deployment_dir }}
+    docker compose stop nginx
+  tags:
+    - docker
+    - stop-nginx

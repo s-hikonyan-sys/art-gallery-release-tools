@@ -1,0 +1,10 @@
+---
+# Nginx コンテナの再起動
+
+- name: Restart nginx container
+  ansible.builtin.shell: |
+    cd {{ deployment_paths.deployment_dir }}
+    docker compose restart nginx
+  tags:
+    - docker
+    - restart-nginx
