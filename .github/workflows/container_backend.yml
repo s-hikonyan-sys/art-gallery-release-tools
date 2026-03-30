@@ -1,0 +1,63 @@
+name: Container Backend (start/stop/restart)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'backend コンテナに実行する操作'
+        required: true
+        type: choice
+        options:
+          - start
+          - stop
+          - restart
+        default: restart
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout art-gallery-release-tools repository
+        uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Setup SSH for Production
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_deploy_key
+          chmod 600 ~/.ssh/ansible_deploy_key
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Write Ansible extra-vars file
+        run: |
+          cat > /tmp/ansible_vars.json << 'VARS_EOF'
+          {
+            "target_hosts": "production",
+            "prod_host": "${{ vars.PROD_HOST }}",
+            "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
+            "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
+            "container_action": "${{ github.event.inputs.action }}",
+            "container_service": "backend"
+          }
+          VARS_EOF
+          chmod 600 /tmp/ansible_vars.json
+
+      - name: Run container action
+        run: |
+          cd ansible
+          ansible-playbook playbook_container_action.yml \
+            --inventory inventory/production.yml \
+            --extra-vars "@/tmp/ansible_vars.json"
+
+      - name: Remove extra-vars file
+        if: always()
+        run: rm -f /tmp/ansible_vars.json
+

@@ -1,0 +1,36 @@
+---
+# 単一サービスのコンテナ操作（start/stop/restart）用プレイブック
+#
+# 目的:
+# - GitHub Actions から「サービス単位」の操作を呼び出せるようにする
+# - tasks_from を変数化して workflow の重複を減らす
+#
+# 必須変数:
+# - target_hosts: 対象ホストグループ（例: production）
+# - container_action: start | stop | restart
+# - container_service: backend | nginx | postgres | secrets
+
+- name: Container action
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  vars:
+    container_action: "{{ container_action | mandatory('container_action must be provided') }}"
+    container_service: "{{ container_service | mandatory('container_service must be provided') }}"
+
+  tasks:
+    - name: Validate inputs
+      ansible.builtin.assert:
+        that:
+          - container_action in ['start', 'stop', 'restart']
+          - container_service in ['backend', 'nginx', 'postgres', 'secrets']
+        fail_msg: "Invalid container_action/container_service"
+
+    - name: Run docker role task for container action
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: "container/{{ container_action }}/{{ container_action }}_{{ container_service }}"
+      tags:
+        - docker
+        - "{{ container_action }}-{{ container_service }}"
+
