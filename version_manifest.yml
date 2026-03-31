@@ -1,0 +1,6 @@
+---
+# Build manifest for traceability.
+# Records release version -> source commit hash mapping per service.
+
+frontend: {}
+backend: {}
