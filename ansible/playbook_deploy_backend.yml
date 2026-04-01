@@ -1,6 +1,7 @@
 ---
-# バックエンドデプロイ専用プレイブック
-# バックエンドのコード、設定、コンテナのデプロイと再起動を実行します
+# バックエンド: イメージ + コードを一括デプロイ（GitHub Actions で両方 true のとき）
+# 実行順: compose → コード/設定 → イメージ更新 → 再起動
+# 単用途: playbook_deploy_backend_image.yml / playbook_deploy_backend_code.yml
 # 実装物（app.py等）はボリュームマウントで提供され、イメージには含まれません
 
 - name: Deploy Backend Application

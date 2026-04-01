@@ -108,22 +108,18 @@ jobs:
 
       - name: Deploy Backend Application
         run: |
-          TAGS=""
-          
-          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
-            TAGS="deploy-compose,update-backend-image"
-          fi
-          
-          if [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
-            [ -n "$TAGS" ] && TAGS="$TAGS,"
-            TAGS="${TAGS}deploy-backend,restart-backend"
-          fi
-          
+          set -e
           cd ansible
-          ansible-playbook playbook_deploy_backend.yml \
-            --inventory inventory/production.yml \
-            --extra-vars "@/tmp/ansible_vars.json" \
-            --tags "$TAGS"
+          IMG="${{ github.event.inputs.run_deploy_image }}"
+          CODE="${{ github.event.inputs.run_deploy_code }}"
+          INV=(--inventory inventory/production.yml --extra-vars "@/tmp/ansible_vars.json")
+          if [ "$IMG" == "true" ] && [ "$CODE" == "true" ]; then
+            ansible-playbook playbook_deploy_backend.yml "${INV[@]}"
+          elif [ "$IMG" == "true" ]; then
+            ansible-playbook playbook_deploy_backend_image.yml "${INV[@]}"
+          else
+            ansible-playbook playbook_deploy_backend_code.yml "${INV[@]}"
+          fi
 
       - name: Remove extra-vars file
         if: always()

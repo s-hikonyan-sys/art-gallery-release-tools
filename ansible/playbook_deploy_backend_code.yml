@@ -1,0 +1,22 @@
+---
+# バックエンド: コード・設定の反映とコンテナ再起動のみ
+# イメージの Pull/再作成は playbook_deploy_backend_image.yml を使用
+
+- name: Deploy Backend Code and Config
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Deploy backend (source and config)
+      ansible.builtin.include_role:
+        name: backend
+      tags:
+        - deploy-backend
+
+    - name: Restart backend container only
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: container/restart/restart_backend
+      tags:
+        - docker
+        - restart-backend
