@@ -2,4 +2,11 @@
 # Frontend build manifest
 # Records release version -> source commit hash mapping.
 
-frontend: {}
+frontend:
+  1.0.0:
+    source_ref: main
+    source_sha: ca0ca9a13924b51ddf415636e94b25b112144412
+    artifact_name: frontend-dist-1.0.0
+    build_run_id: "23854604990"
+    build_workflow: Build Frontend
+    updated_at_utc: ""
