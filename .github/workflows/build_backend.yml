@@ -102,7 +102,7 @@ jobs:
               "build_workflow": strenv(GITHUB_WORKFLOW),
               "updated_at_utc": strenv(UPDATED_AT)
             }
-          ' version_manifest.yml
+          ' backend_version_manifest.yml
         env:
           BACKEND_IMAGE_TAG: ${{ env.BACKEND_IMAGE_TAG }}
           BACKEND_REF: ${{ env.BACKEND_REF }}
@@ -121,7 +121,7 @@ jobs:
           delete-branch: true
           title: "chore: record backend build manifest ${{ env.BACKEND_IMAGE_TAG }}"
           body: |
-            Update `version_manifest.yml` for backend build.
+            Update `backend_version_manifest.yml` for backend build.
 
             - version: `${{ env.BACKEND_IMAGE_TAG }}`
             - ref: `${{ env.BACKEND_REF }}`

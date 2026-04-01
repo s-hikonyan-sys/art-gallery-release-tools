@@ -99,7 +99,7 @@ jobs:
               "build_workflow": strenv(GITHUB_WORKFLOW),
               "updated_at_utc": strenv(UPDATED_AT)
             }
-          ' version_manifest.yml
+          ' frontend_version_manifest.yml
         env:
           RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
           FRONTEND_REF: ${{ env.FRONTEND_REF }}
@@ -117,7 +117,7 @@ jobs:
           delete-branch: true
           title: "chore: record frontend build manifest ${{ env.RELEASE_VERSION }}"
           body: |
-            Update `version_manifest.yml` for frontend build.
+            Update `frontend_version_manifest.yml` for frontend build.
 
             - version: `${{ env.RELEASE_VERSION }}`
             - ref: `${{ env.FRONTEND_REF }}`

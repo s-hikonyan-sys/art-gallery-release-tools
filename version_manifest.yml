@@ -1,6 +1,6 @@
 ---
-# Build manifest for traceability.
-# Records release version -> source commit hash mapping per service.
+# Build manifest index for traceability.
+# Service-specific manifests are split to avoid PR conflicts.
 
-frontend: {}
-backend: {}
+frontend_manifest_path: "frontend_version_manifest.yml"
+backend_manifest_path: "backend_version_manifest.yml"
