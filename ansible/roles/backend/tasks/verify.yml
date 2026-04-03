@@ -1,0 +1,34 @@
+---
+# バックエンド検証処理
+
+- name: Verify backend application files exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: backend_files
+  failed_when: not item_stat.stat.exists
+  loop:
+    - "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}/app.py"
+    - "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}/domain/"
+  loop_control:
+    loop_var: item_stat
+  tags:
+    - backend
+    - verify
+
+- name: Verify backend log file exists
+  ansible.builtin.stat:
+    path: "{{ deployment_paths.logs_dir }}/backend/app.log"
+  register: log_file
+  failed_when: not log_file.stat.exists
+  tags:
+    - backend
+    - verify
+
+- name: Check if backend is responding (HTTP check)
+  ansible.builtin.uri:
+    url: "http://localhost:{{ backend_port }}{{ health_check.backend_path }}"
+    method: GET
+    status_code: 200
+  tags:
+    - backend
+    - verify
