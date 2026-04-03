@@ -124,3 +124,118 @@ jobs:
       - name: Remove extra-vars file
         if: always()
         run: rm -f /tmp/ansible_vars.json
+
+  record_deploy_manifest:
+    name: Record deploy & open PR
+    needs: deploy
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout art-gallery-release-tools repository
+        uses: actions/checkout@v4
+
+      - name: Install yq (YAML processor)
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Resolve metadata and append manifest entry
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+          if [ -z "$RELEASE_VERSION" ]; then
+            RELEASE_VERSION="${{ vars.RELEASE_VERSION }}"
+          fi
+          if [ -z "$RELEASE_VERSION" ]; then
+            echo "::error::RELEASE_VERSION が入力にもリポジトリ変数にもありません。"
+            exit 1
+          fi
+
+          IMG="${{ github.event.inputs.run_deploy_image }}"
+          CODE="${{ github.event.inputs.run_deploy_code }}"
+          BACKEND_REF="${{ github.event.inputs.backend_ref }}"
+
+          if [ "$IMG" = "true" ] && [ "$CODE" = "true" ]; then
+            DEPLOY_TYPE="both"
+          elif [ "$IMG" = "true" ]; then
+            DEPLOY_TYPE="image"
+          else
+            DEPLOY_TYPE="code"
+          fi
+
+          OWNER=$(yq -r '.github_owner' ansible/group_vars/all.yml)
+          REPO=$(yq -r '.service_repo_names.backend' ansible/group_vars/all.yml)
+          if [ -z "$OWNER" ] || [ "$OWNER" = "null" ] || [ -z "$REPO" ] || [ "$REPO" = "null" ]; then
+            echo "::error::group_vars/all.yml から github_owner / backend リポジトリ名を取得できませんでした。"
+            exit 1
+          fi
+
+          resolve_sha() {
+            local ref="$1"
+            gh api "repos/${OWNER}/${REPO}/commits/${ref}" --jq .sha
+          }
+
+          REF_SHA=""
+          IMG_SHA=""
+          if [ "$CODE" = "true" ]; then
+            REF_SHA=$(resolve_sha "${BACKEND_REF}")
+          fi
+          if [ "$IMG" = "true" ]; then
+            if ! IMG_SHA=$(resolve_sha "${RELEASE_VERSION}" 2>/dev/null); then
+              IMG_SHA=$(resolve_sha "refs/tags/${RELEASE_VERSION}")
+            fi
+          fi
+
+          MANIFEST="backend_deploy_manifest.yml"
+          jq -n \
+            --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg dt "$DEPLOY_TYPE" \
+            --arg rv "$RELEASE_VERSION" \
+            --arg br "$BACKEND_REF" \
+            --arg rc "${REF_SHA}" \
+            --arg ic "${IMG_SHA}" \
+            --arg url "$RUN_URL" \
+            '{
+              timestamp: $ts,
+              deploy_type: $dt,
+              release_version: $rv,
+              backend_ref: $br,
+              ref_commit_sha: (if $rc == "" then null else $rc end),
+              image_tag_commit_sha: (if $ic == "" then null else $ic end),
+              workflow_run_url: $url
+            }' | yq -P '.' > /tmp/deploy_entry.yml
+
+          if [ ! -f "$MANIFEST" ] || ! yq -e '.backend_deployments' "$MANIFEST" &>/dev/null; then
+            printf '%s\n' '---' 'backend_deployments: []' > "$MANIFEST"
+          fi
+          yq -i '.backend_deployments += [load("/tmp/deploy_entry.yml")]' "$MANIFEST"
+          rm -f /tmp/deploy_entry.yml
+
+      - name: Create pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+          if [ -z "$RELEASE_VERSION" ]; then
+            RELEASE_VERSION="${{ vars.RELEASE_VERSION }}"
+          fi
+          BRANCH="chore/backend-deploy-record-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add backend_deploy_manifest.yml
+          git commit -m "chore(backend): record production deploy ${RELEASE_VERSION}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore(backend): record production deploy ${RELEASE_VERSION}" \
+            --body "Deploy workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --base "${{ github.event.repository.default_branch }}"

@@ -1,0 +1,7 @@
+---
+# Backend production deploy history (appended by Deploy Backend workflow on success).
+# deploy_type: code | image | both
+# ref_commit_sha: SHA of backend_ref when a code deploy ran; otherwise null.
+# image_tag_commit_sha: SHA of the release_version ref on art-gallery-backend when an image deploy ran; otherwise null.
+
+backend_deployments: []
