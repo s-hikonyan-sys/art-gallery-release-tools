@@ -1,16 +1,20 @@
 ---
 # バックエンド検証処理
 
-- name: Verify backend application files exist
+- name: Verify backend app.py exists
   ansible.builtin.stat:
-    path: "{{ item }}"
-  register: backend_files
-  failed_when: not item_stat.stat.exists
-  loop:
-    - "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}/app.py"
-    - "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}/domain/"
-  loop_control:
-    loop_var: item_stat
+    path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}/app.py"
+  register: backend_app_py
+  failed_when: not backend_app_py.stat.exists
+  tags:
+    - backend
+    - verify
+
+- name: Verify backend domain directory exists
+  ansible.builtin.stat:
+    path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}/domain/"
+  register: backend_domain_dir
+  failed_when: not backend_domain_dir.stat.exists
   tags:
     - backend
     - verify
