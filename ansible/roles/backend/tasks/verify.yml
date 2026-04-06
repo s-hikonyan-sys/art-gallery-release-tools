@@ -28,11 +28,18 @@
     - backend
     - verify
 
-- name: Check if backend is responding (HTTP check)
-  ansible.builtin.uri:
-    url: "http://localhost:{{ backend_port }}{{ health_check.backend_path }}"
-    method: GET
-    status_code: 200
+# バックエンドは compose でホストへ ports 公開していないため、コンテナ内からヘルスを確認する
+- name: Check if backend is responding (HTTP check via docker exec)
+  ansible.builtin.shell:
+    cmd: >-
+      docker exec {{ container_names.backend }} python -c
+      "import urllib.request as u; r=u.urlopen('http://127.0.0.1:{{ backend_port }}{{ health_check.backend_path }}', timeout=15); assert r.status==200"
+  register: backend_health
+  changed_when: false
+  retries: 12
+  delay: 5
+  until: backend_health.rc == 0
+  become: true
   tags:
     - backend
     - verify
