@@ -27,8 +27,6 @@ services:
       POSTGRES_DB: "{{ database_name | mandatory('database_name must be set in inventory') }}"
       POSTGRES_USER: "{{ database_user | mandatory('database_user must be set in inventory') }}"
       # パスワードはコンテナ内でFernetから取得
-    ports:
-      - "{{ database_port }}:5432"
     volumes:
       - {{ docker_volume_postgres_data | mandatory('docker_volume_postgres_data must be set in inventory') }}:/var/lib/postgresql/data
       - ./scripts/postgres-entrypoint.sh:/app/scripts/postgres-entrypoint.sh:ro
