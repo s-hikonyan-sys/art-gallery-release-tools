@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       code_version:
-        description: 'コードバージョンのラベル（backend_code_manifest.yml のキー。例: 1.0.0）'
-        required: true
+        description: 'コードバージョンのラベル（backend_code_manifest.yml のキー。未指定時は vars.RELEASE_VERSION。例: 1.0.0）'
+        required: false
         type: string
       backend_ref:
         description: '登録する backend リポジトリの ref (branch/tag/sha)'
@@ -39,7 +39,11 @@ jobs:
           echo "GITHUB_OWNER=${GITHUB_OWNER}" >> $GITHUB_ENV
           echo "BACKEND_REPO_NAME=${BACKEND_REPO_NAME}" >> $GITHUB_ENV
 
-          CODE_VERSION="${{ github.event.inputs.code_version }}"
+          CODE_VERSION="${{ github.event.inputs.code_version || vars.RELEASE_VERSION }}"
+          if [ -z "$CODE_VERSION" ]; then
+            echo "::error::code_version（入力）または vars.RELEASE_VERSION が必要です。"
+            exit 1
+          fi
           BACKEND_REF="${{ github.event.inputs.backend_ref }}"
 
           BACKEND_SOURCE_SHA=$(git ls-remote \
