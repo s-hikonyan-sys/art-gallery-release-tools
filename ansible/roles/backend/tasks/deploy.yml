@@ -4,18 +4,29 @@
 
 - name: Deploy backend application code from GitHub
   # git -c によるインメモリ認証設定を使用。.git/config へのトークン書き込みを防ぐ
+  # backend_sha が指定されていればそのコミットに固定（マニフェスト運用向）
   ansible.builtin.shell: |
     set -e
     DEST="{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}"
     REPO_URL="https://github.com/{{ github_owner }}/{{ service_repo_names.backend }}.git"
     TOKEN_REWRITE="url.https://x-access-token:{{ github_token_backend }}@github.com/.insteadOf=https://github.com/"
+    REF="{{ backend_ref | mandatory('backend_ref must be provided') }}"
+    SHA="{{ backend_sha | default('') }}"
 
     if [ -d "${DEST}/.git" ]; then
-      git -C "${DEST}" -c "${TOKEN_REWRITE}" fetch --depth 1 origin "{{ backend_ref | mandatory('backend_ref must be provided') }}"
-      git -C "${DEST}" reset --hard FETCH_HEAD
+      if [ -n "${SHA}" ]; then
+        git -C "${DEST}" -c "${TOKEN_REWRITE}" fetch --depth 1 origin "${SHA}"
+        git -C "${DEST}" reset --hard "${SHA}"
+      else
+        git -C "${DEST}" -c "${TOKEN_REWRITE}" fetch --depth 1 origin "${REF}"
+        git -C "${DEST}" reset --hard FETCH_HEAD
+      fi
     else
-      git -c "${TOKEN_REWRITE}" clone --depth 1 --branch "{{ backend_ref | mandatory('backend_ref must be provided') }}" \
-        "${REPO_URL}" "${DEST}"
+      git -c "${TOKEN_REWRITE}" clone --depth 1 --branch "${REF}" "${REPO_URL}" "${DEST}"
+      if [ -n "${SHA}" ]; then
+        git -C "${DEST}" -c "${TOKEN_REWRITE}" fetch --depth 1 origin "${SHA}"
+        git -C "${DEST}" reset --hard "${SHA}"
+      fi
     fi
   no_log: true
   become: yes

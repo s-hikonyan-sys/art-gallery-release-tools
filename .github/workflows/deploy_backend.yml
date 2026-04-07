@@ -14,11 +14,15 @@ on:
         type: boolean
         default: false
       release_version:
-        description: 'デプロイ対象のリリースバージョン (例: v1.0.0。未指定時はリポジトリ変数を参照)'
+        description: 'GHCR ペイロード用のイメージタグ（backend_version_manifest.yml のキー。未指定時は vars.RELEASE_VERSION）'
+        required: false
+        type: string
+      code_version:
+        description: 'コードデプロイ時: backend_code_manifest.yml のキー（未指定なら backend_ref のみで取得）'
         required: false
         type: string
       backend_ref:
-        description: 'デプロイする backend リポジトリの ref (branch/tag/sha)'
+        description: 'code_version 未指定時の backend の ref。code_version 指定時はマニフェストが優先されます'
         required: false
         default: 'main'
         type: string
@@ -48,27 +52,56 @@ jobs:
       - name: Set Context
         id: context
         run: |
+          set -euo pipefail
           VERSION="${{ github.event.inputs.release_version || vars.RELEASE_VERSION }}"
           if [ -z "$VERSION" ]; then
-            echo "::error::RELEASE_VERSION が定義されていません。"
+            echo "::error::RELEASE_VERSION（入力またはリポジトリ変数）が定義されていません。"
             exit 1
           fi
           echo "RELEASE_VERSION=${VERSION}" >> $GITHUB_ENV
           echo "BACKEND_IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
-          echo "BACKEND_REF=${{ github.event.inputs.backend_ref }}" >> $GITHUB_ENV
-          
-          # Ansibleのgroup_vars/all.ymlから変数を取得
-          # GitHub Actions Runner上で実行されるため、yqで直接パースする
-          
+
+          IMG="${{ github.event.inputs.run_deploy_image }}"
+          CODE="${{ github.event.inputs.run_deploy_code }}"
+          CODE_VERSION_INPUT="${{ github.event.inputs.code_version }}"
+          BACKEND_REF_INPUT="${{ github.event.inputs.backend_ref }}"
+
+          if [ "$IMG" = "true" ]; then
+            IMG_SHA_LOOKUP=$(yq -r ".backend[\"${VERSION}\"].source_sha" backend_version_manifest.yml)
+            if [ -z "$IMG_SHA_LOOKUP" ] || [ "$IMG_SHA_LOOKUP" = "null" ]; then
+              echo "::error::backend_version_manifest.yml にイメージタグ ${VERSION} がありません。Build Backend のマニフェスト PR をマージしてからデプロイしてください。"
+              exit 1
+            fi
+          fi
+
+          BACKEND_REF="${BACKEND_REF_INPUT}"
+          BACKEND_SHA=""
+          echo "CODE_VERSION=${CODE_VERSION_INPUT}" >> $GITHUB_ENV
+          if [ "$CODE" = "true" ]; then
+            if [ -n "$CODE_VERSION_INPUT" ]; then
+              CODE_REF=$(yq -r ".backend_code[\"${CODE_VERSION_INPUT}\"].source_ref" backend_code_manifest.yml)
+              CODE_SHA=$(yq -r ".backend_code[\"${CODE_VERSION_INPUT}\"].source_sha" backend_code_manifest.yml)
+              if [ -z "$CODE_REF" ] || [ "$CODE_REF" = "null" ] || [ -z "$CODE_SHA" ] || [ "$CODE_SHA" = "null" ]; then
+                echo "::error::backend_code_manifest.yml に code_version \"${CODE_VERSION_INPUT}\" がありません。Register Backend Code の PR をマージしてからデプロイしてください。"
+                exit 1
+              fi
+              BACKEND_REF="${CODE_REF}"
+              BACKEND_SHA="${CODE_SHA}"
+            fi
+          fi
+
+          echo "BACKEND_REF=${BACKEND_REF}" >> $GITHUB_ENV
+          echo "BACKEND_SHA=${BACKEND_SHA}" >> $GITHUB_ENV
+
           GITHUB_OWNER=$(yq '.github_owner' ansible/group_vars/all.yml)
           GHCR_BASE_REGISTRY=$(yq '.ghcr_base_registry' ansible/group_vars/all.yml)
           BACKEND_REPO_NAME=$(yq '.service_repo_names.backend' ansible/group_vars/all.yml)
-          
+
           if [ -z "${GITHUB_OWNER}" ] || [ -z "${GHCR_BASE_REGISTRY}" ] || [ -z "${BACKEND_REPO_NAME}" ]; then
             echo "::error::Ansibleのgroup_vars/all.ymlから変数を取得できませんでした。"
             exit 1
           fi
-          
+
           echo "GITHUB_OWNER=${GITHUB_OWNER}" >> $GITHUB_ENV
           echo "BACKEND_REPO_NAME=${BACKEND_REPO_NAME}" >> $GITHUB_ENV
           echo "BACKEND_IMAGE_NAME=${GHCR_BASE_REGISTRY}/${GITHUB_OWNER}/${BACKEND_REPO_NAME}" >> $GITHUB_ENV
@@ -76,34 +109,43 @@ jobs:
       - name: Install Ansible and dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ansible
+          sudo apt-get install -y ansible jq
           ansible-galaxy collection install community.docker
 
-      # --- デプロイ準備 ---
       - name: Setup SSH for Production Deployment
         run: |
           mkdir -p ~/.ssh
-          # 特定のファイル名に依存せず "ansible_deploy_key" という名前で保存
           echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_deploy_key
           chmod 600 ~/.ssh/ansible_deploy_key
           echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      # --- デプロイ工程 ---
       - name: Write Ansible extra-vars file
+        env:
+          BACKEND_REF: ${{ env.BACKEND_REF }}
+          BACKEND_SHA: ${{ env.BACKEND_SHA }}
+          BACKEND_IMAGE_TAG: ${{ env.BACKEND_IMAGE_TAG }}
         run: |
-          cat > /tmp/ansible_vars.json << 'VARS_EOF'
-          {
-            "target_hosts": "production",
-            "prod_host": "${{ vars.PROD_HOST }}",
-            "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
-            "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
-            "backend_ref": "${{ env.BACKEND_REF }}",
-            "backend_image_tag": "${{ env.BACKEND_IMAGE_TAG }}",
-            "github_token_backend": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}",
-            "github_token_release_tools": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}"
-          }
-          VARS_EOF
+          set -euo pipefail
+          jq -n \
+            --arg ph "${{ vars.PROD_HOST }}" \
+            --arg pu "${{ vars.PROD_SSH_USER }}" \
+            --arg ref "$BACKEND_REF" \
+            --arg tag "$BACKEND_IMAGE_TAG" \
+            --arg sha "$BACKEND_SHA" \
+            --arg ghb "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}" \
+            --arg ghr "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}" \
+            '{
+              target_hosts: "production",
+              prod_host: $ph,
+              prod_ssh_user: $pu,
+              prod_ssh_key_path: "~/.ssh/ansible_deploy_key",
+              backend_ref: $ref,
+              backend_image_tag: $tag,
+              github_token_backend: $ghb,
+              github_token_release_tools: $ghr
+            } | if ($sha | length) > 0 then . + {backend_sha: $sha} else . end' \
+            > /tmp/ansible_vars.json
           chmod 600 /tmp/ansible_vars.json
 
       - name: Deploy Backend Application
@@ -143,10 +185,13 @@ jobs:
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Resolve metadata and append manifest entry
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}
         run: |
           set -euo pipefail
 
@@ -161,6 +206,7 @@ jobs:
 
           IMG="${{ github.event.inputs.run_deploy_image }}"
           CODE="${{ github.event.inputs.run_deploy_code }}"
+          CODE_VERSION="${{ github.event.inputs.code_version }}"
           BACKEND_REF="${{ github.event.inputs.backend_ref }}"
 
           if [ "$IMG" = "true" ] && [ "$CODE" = "true" ]; then
@@ -173,25 +219,24 @@ jobs:
 
           OWNER=$(yq -r '.github_owner' ansible/group_vars/all.yml)
           REPO=$(yq -r '.service_repo_names.backend' ansible/group_vars/all.yml)
-          if [ -z "$OWNER" ] || [ "$OWNER" = "null" ] || [ -z "$REPO" ] || [ "$REPO" = "null" ]; then
-            echo "::error::group_vars/all.yml から github_owner / backend リポジトリ名を取得できませんでした。"
-            exit 1
-          fi
-
-          resolve_sha() {
-            local ref="$1"
-            gh api "repos/${OWNER}/${REPO}/commits/${ref}" --jq .sha
-          }
 
           REF_SHA=""
-          IMG_SHA=""
           if [ "$CODE" = "true" ]; then
-            REF_SHA=$(resolve_sha "${BACKEND_REF}")
-          fi
-          if [ "$IMG" = "true" ]; then
-            if ! IMG_SHA=$(resolve_sha "${RELEASE_VERSION}" 2>/dev/null); then
-              IMG_SHA=$(resolve_sha "refs/tags/${RELEASE_VERSION}")
+            if [ -n "$CODE_VERSION" ]; then
+              REF_SHA=$(yq -r ".backend_code[\"${CODE_VERSION}\"].source_sha" backend_code_manifest.yml)
+              [ "$REF_SHA" = "null" ] && REF_SHA=""
             fi
+            if [ -z "$REF_SHA" ]; then
+              REF_SHA=$(git ls-remote \
+                "https://x-access-token:${GH_TOKEN}@github.com/${OWNER}/${REPO}.git" \
+                "${BACKEND_REF}" | awk 'NR==1{print $1}')
+            fi
+          fi
+
+          IMG_SHA=""
+          if [ "$IMG" = "true" ]; then
+            IMG_SHA=$(yq -r ".backend[\"${RELEASE_VERSION}\"].source_sha" backend_version_manifest.yml)
+            if [ "$IMG_SHA" = "null" ]; then IMG_SHA=""; fi
           fi
 
           MANIFEST="backend_deploy_manifest.yml"
@@ -199,6 +244,7 @@ jobs:
             --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg dt "$DEPLOY_TYPE" \
             --arg rv "$RELEASE_VERSION" \
+            --arg cv "$CODE_VERSION" \
             --arg br "$BACKEND_REF" \
             --arg rc "${REF_SHA}" \
             --arg ic "${IMG_SHA}" \
@@ -207,9 +253,10 @@ jobs:
               timestamp: $ts,
               deploy_type: $dt,
               release_version: $rv,
+              code_version: (if $cv == "" then null else $cv end),
               backend_ref: $br,
               ref_commit_sha: (if $rc == "" then null else $rc end),
-              image_tag_commit_sha: (if $ic == "" then null else $ic end),
+              image_source_sha: (if $ic == "" then null else $ic end),
               workflow_run_url: $url
             }' | yq -P '.' > /tmp/deploy_entry.yml
 
@@ -228,6 +275,7 @@ jobs:
           if [ -z "$RELEASE_VERSION" ]; then
             RELEASE_VERSION="${{ vars.RELEASE_VERSION }}"
           fi
+          CV="${{ github.event.inputs.code_version }}"
           BRANCH="chore/backend-deploy-record-${{ github.run_id }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -235,7 +283,15 @@ jobs:
           git add backend_deploy_manifest.yml
           git commit -m "chore(backend): record production deploy ${RELEASE_VERSION}"
           git push origin "$BRANCH"
+          BODY_FILE=$(mktemp)
+          {
+            echo "Deploy workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo "- release_version: \`${RELEASE_VERSION}\`"
+            echo "- code_version: \`${CV:-"(none)"}\`"
+          } > "$BODY_FILE"
           gh pr create \
             --title "chore(backend): record production deploy ${RELEASE_VERSION}" \
-            --body "Deploy workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --body-file "$BODY_FILE" \
             --base "${{ github.event.repository.default_branch }}"
+          rm -f "$BODY_FILE"

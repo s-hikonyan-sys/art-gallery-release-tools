@@ -1,0 +1,6 @@
+---
+# Backend code deploy manifest
+# code_version (key) -> source_ref, source_sha recorded at registration.
+# Register: .github/workflows/register_backend_code.yml (PR)
+
+backend_code: {}

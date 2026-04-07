@@ -1,0 +1,102 @@
+name: Register Backend Code Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      code_version:
+        description: 'コードバージョンのラベル（backend_code_manifest.yml のキー。例: 1.0.0）'
+        required: true
+        type: string
+      backend_ref:
+        description: '登録する backend リポジトリの ref (branch/tag/sha)'
+        required: false
+        default: 'main'
+        type: string
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout art-gallery-release-tools repository
+        uses: actions/checkout@v4
+
+      - name: Install yq (YAML processor)
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Set Context
+        run: |
+          GITHUB_OWNER=$(yq -r '.github_owner' ansible/group_vars/all.yml)
+          BACKEND_REPO_NAME=$(yq -r '.service_repo_names.backend' ansible/group_vars/all.yml)
+          if [ -z "${GITHUB_OWNER}" ] || [ "${GITHUB_OWNER}" = "null" ] || [ -z "${BACKEND_REPO_NAME}" ] || [ "${BACKEND_REPO_NAME}" = "null" ]; then
+            echo "::error::group_vars/all.yml から github_owner / backend リポジトリ名を取得できませんでした。"
+            exit 1
+          fi
+          echo "GITHUB_OWNER=${GITHUB_OWNER}" >> $GITHUB_ENV
+          echo "BACKEND_REPO_NAME=${BACKEND_REPO_NAME}" >> $GITHUB_ENV
+
+          CODE_VERSION="${{ github.event.inputs.code_version }}"
+          BACKEND_REF="${{ github.event.inputs.backend_ref }}"
+
+          BACKEND_SOURCE_SHA=$(git ls-remote \
+            "https://x-access-token:${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}@github.com/${GITHUB_OWNER}/${BACKEND_REPO_NAME}.git" \
+            "${BACKEND_REF}" | awk 'NR==1{print $1}')
+
+          if [ -z "$BACKEND_SOURCE_SHA" ]; then
+            echo "::error::backend_ref からコミットSHAを解決できませんでした。"
+            exit 1
+          fi
+
+          echo "CODE_VERSION=${CODE_VERSION}" >> $GITHUB_ENV
+          echo "BACKEND_REF=${BACKEND_REF}" >> $GITHUB_ENV
+          echo "BACKEND_SOURCE_SHA=${BACKEND_SOURCE_SHA}" >> $GITHUB_ENV
+
+      - name: Checkout release-tools for manifest update
+        uses: actions/checkout@v4
+        with:
+          repository: s-hikonyan-sys/art-gallery-release-tools
+          ref: main
+          token: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}
+          path: release-tools-manifest
+
+      - name: Update code manifest (backend)
+        working-directory: release-tools-manifest
+        run: |
+          REGISTERED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          yq eval -i '
+            .backend_code[strenv(CODE_VERSION)] = {
+              "source_ref": strenv(BACKEND_REF),
+              "source_sha": strenv(BACKEND_SOURCE_SHA),
+              "registered_by_run_id": strenv(GITHUB_RUN_ID),
+              "registered_by_workflow": strenv(GITHUB_WORKFLOW),
+              "registered_at_utc": strenv(REGISTERED_AT)
+            }
+          ' backend_code_manifest.yml
+        env:
+          CODE_VERSION: ${{ env.CODE_VERSION }}
+          BACKEND_REF: ${{ env.BACKEND_REF }}
+          BACKEND_SOURCE_SHA: ${{ env.BACKEND_SOURCE_SHA }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+
+      - name: Create PR for code manifest update
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}
+          path: release-tools-manifest
+          commit-message: "chore: register backend code version ${{ env.CODE_VERSION }}"
+          branch: "chore/manifest-backend-code-${{ env.CODE_VERSION }}-${{ github.run_id }}"
+          delete-branch: true
+          title: "chore: register backend code version ${{ env.CODE_VERSION }}"
+          body: |
+            Update `backend_code_manifest.yml`.
+
+            - code_version: `${{ env.CODE_VERSION }}`
+            - ref: `${{ env.BACKEND_REF }}`
+            - source sha: `${{ env.BACKEND_SOURCE_SHA }}`
+            - run id: `${{ github.run_id }}`
+          base: main

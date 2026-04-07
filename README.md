@@ -20,6 +20,24 @@
 - **完全手動デプロイ**: 意図しない更新を防ぐため、すべてのデプロイ・ビルド処理は GitHub Actions の `workflow_dispatch` から手動で実行します。「イメージのみの更新」と「コードのみの反映」を独立してトリガー可能です。
 - **集中依存関係管理**: 各アプリケーションの `Dockerfile` や `requirements.txt` などを本リポジトリで一元管理し、実行環境の整合性を保証します。
 
+## Backend のバージョン管理（マニフェスト）
+
+Git タグではなく、**release-tools 上の YAML** でイメージタグとソースコミットの対応を集中管理します。
+
+| ファイル | 内容 |
+|:---|:---|
+| `backend_version_manifest.yml` | **イメージ**: タグ（キー）→ ビルド時の `source_ref` / `source_sha` / イメージ参照。`build_backend.yml` がビルド後に PR で追記。 |
+| `backend_code_manifest.yml` | **コード**: 論理バージョン（キー）→ デプロイ対象の `source_ref` / `source_sha`。`register_backend_code.yml` が PR で追記。 |
+| `backend_deploy_manifest.yml` | **本番デプロイ履歴**: `deploy_backend.yml` 成功後に追記（別 PR）。 |
+
+**推奨フロー**
+
+1. イメージを切る: `build_backend.yml` → マニフェスト PR をマージ。
+2. 本番コード版を固定する: `register_backend_code.yml`（`code_version` と `backend_ref`）→ マニフェスト PR をマージ。
+3. `deploy_backend.yml` 実行時に `release_version`（イメージタグ）と、コード反映時は `code_version`（未指定なら `backend_ref` のみで `git` 取得。記録用 SHA は `git ls-remote` で解決）。
+
+イメージデプロイ（`run_deploy_image`）では、`release_version` が **`backend_version_manifest.yml` に存在する必要**があります（GitHub 上のタグは不要）。
+
 ## 機密情報のデプロイフロー
 
 1. **事前準備**: 管理者がローカルで `art-gallery-secrets` の `SecretManager` を用いてパスワードを Fernet 暗号化し、GitHub Secrets に `PROD_SECRET_KEY` と `PROD_DB_PASSWORD_ENCRYPTED` として登録します。
@@ -30,15 +48,19 @@
 
 ```
 art-gallery-release-tools/
+├── backend_version_manifest.yml  # イメージタグ ↔ ソース SHA（build_backend が更新）
+├── backend_code_manifest.yml     # コード版ラベル ↔ ソース SHA（register_backend_code が更新）
+├── backend_deploy_manifest.yml   # 本番デプロイ履歴（deploy_backend が更新）
 ├── .github/
 │   ├── actions/
 │   │   └── write-secrets-files/  # カスタムアクション（GitHub Secrets → ファイル出力）
 │   └── workflows/
 │       ├── build_backend.yml     # イメージビルド（workflow_dispatch）
+│       ├── register_backend_code.yml  # コード版マニフェスト登録（workflow_dispatch）
 │       ├── build_database.yml
 │       ├── build_nginx.yml       # nginx イメージ（nginx:alpine + entrypoint）
 │       ├── build_secrets.yml
-│       ├── deploy_backend.yml    # コード反映・コンテナ再起動（workflow_dispatch）
+│       ├── deploy_backend.yml    # コード反映・イメージ更新（workflow_dispatch、マニフェスト参照）
 │       ├── deploy_database.yml
 │       ├── deploy_secrets.yml
 │       ├── deploy_frontend.yml        # Artifact 展開 + Nginx リロード（CI 自動トリガー）
@@ -111,6 +133,7 @@ graph TB
         subgraph ReleaseTools_Repo["art-gallery-release-tools (Public)"]
             subgraph RT_Workflows["ワークフロー群 (全て workflow_dispatch による手動実行)"]
                 RT_BUILD["build_backend.yml<br/>build_database.yml<br/>build_secrets.yml"]
+                RT_REG_CODE["register_backend_code.yml"]
                 RT_DEP_B["deploy_backend.yml"]
                 RT_DEP_D["deploy_database.yml"]
                 RT_DEP_S["deploy_secrets.yml"]
@@ -204,8 +227,9 @@ graph TB
 
 #### ワークフロー（全て workflow_dispatch による手動実行）
 
-- **ビルド**: `build_backend.yml` / `build_database.yml` / `build_secrets.yml` — 各コンポーネントの Docker イメージをビルドし GHCR にプッシュ
-- **デプロイ**: `deploy_backend.yml` — Backend コードを git pull してコンテナを再起動  
+- **ビルド**: `build_backend.yml` / `build_database.yml` / `build_secrets.yml` — 各コンポーネントの Docker イメージをビルドし GHCR にプッシュ（backend は `backend_version_manifest.yml` を PR で更新）
+- **登録**: `register_backend_code.yml` — 本番に載せるコード版を `backend_code_manifest.yml` に記録（PR）
+- **デプロイ**: `deploy_backend.yml` — Backend のコード反映・イメージ pull/再起動（`release_version` / `code_version` は各マニフェストのキーを参照。成功後 `backend_deploy_manifest.yml` を PR で更新）  
   `deploy_database.yml` — postgres-entrypoint.sh を配置し DB マイグレーションを適用  
   `deploy_secrets.yml` — `write-secrets-files` アクションで設定ファイルを生成し Secrets API コンテナを再起動  
   `deploy_frontend.yml` — GitHub Artifact をダウンロードして `dist/frontend/` に展開後、Nginx をホットリロード  
