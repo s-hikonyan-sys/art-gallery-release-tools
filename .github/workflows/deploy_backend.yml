@@ -14,11 +14,11 @@ on:
         type: boolean
         default: false
       release_version:
-        description: 'GHCR ペイロード用のイメージタグ（backend_version_manifest.yml のキー。未指定時は vars.RELEASE_VERSION）'
+        description: 'GHCR ペイロード用のイメージタグ（manifest/backend/image/backend_version_manifest.yml のキー。未指定時は vars.RELEASE_VERSION）'
         required: false
         type: string
       code_version:
-        description: 'コードデプロイ時: backend_code_manifest.yml のキー（未指定なら backend_ref のみで取得）'
+        description: 'コードデプロイ時: manifest/backend/code/backend_code_manifest.yml のキー（未指定なら backend_ref のみで取得）'
         required: false
         type: string
       backend_ref:
@@ -32,6 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      MANIFEST_BACKEND_IMAGE: manifest/backend/image/backend_version_manifest.yml
+      MANIFEST_BACKEND_CODE: manifest/backend/code/backend_code_manifest.yml
+      MANIFEST_BACKEND_DEPLOY: manifest/backend/deploy/backend_deploy_manifest.yml
 
     steps:
       - name: Checkout art-gallery-release-tools repository
@@ -67,9 +71,9 @@ jobs:
           BACKEND_REF_INPUT="${{ github.event.inputs.backend_ref }}"
 
           if [ "$IMG" = "true" ]; then
-            IMG_SHA_LOOKUP=$(yq -r ".backend[\"${VERSION}\"].source_sha" backend_version_manifest.yml)
+            IMG_SHA_LOOKUP=$(yq -r ".backend[\"${VERSION}\"].source_sha" "$MANIFEST_BACKEND_IMAGE")
             if [ -z "$IMG_SHA_LOOKUP" ] || [ "$IMG_SHA_LOOKUP" = "null" ]; then
-              echo "::error::backend_version_manifest.yml にイメージタグ ${VERSION} がありません。Build Backend のマニフェスト PR をマージしてからデプロイしてください。"
+              echo "::error::${MANIFEST_BACKEND_IMAGE} にイメージタグ ${VERSION} がありません。Build Backend のマニフェスト PR をマージしてからデプロイしてください。"
               exit 1
             fi
           fi
@@ -79,10 +83,10 @@ jobs:
           echo "CODE_VERSION=${CODE_VERSION_INPUT}" >> $GITHUB_ENV
           if [ "$CODE" = "true" ]; then
             if [ -n "$CODE_VERSION_INPUT" ]; then
-              CODE_REF=$(yq -r ".backend_code[\"${CODE_VERSION_INPUT}\"].source_ref" backend_code_manifest.yml)
-              CODE_SHA=$(yq -r ".backend_code[\"${CODE_VERSION_INPUT}\"].source_sha" backend_code_manifest.yml)
+              CODE_REF=$(yq -r ".backend_code[\"${CODE_VERSION_INPUT}\"].source_ref" "$MANIFEST_BACKEND_CODE")
+              CODE_SHA=$(yq -r ".backend_code[\"${CODE_VERSION_INPUT}\"].source_sha" "$MANIFEST_BACKEND_CODE")
               if [ -z "$CODE_REF" ] || [ "$CODE_REF" = "null" ] || [ -z "$CODE_SHA" ] || [ "$CODE_SHA" = "null" ]; then
-                echo "::error::backend_code_manifest.yml に code_version \"${CODE_VERSION_INPUT}\" がありません。Register Backend Code の PR をマージしてからデプロイしてください。"
+                echo "::error::${MANIFEST_BACKEND_CODE} に code_version \"${CODE_VERSION_INPUT}\" がありません。Register Backend Code の PR をマージしてからデプロイしてください。"
                 exit 1
               fi
               BACKEND_REF="${CODE_REF}"
@@ -223,7 +227,7 @@ jobs:
           REF_SHA=""
           if [ "$CODE" = "true" ]; then
             if [ -n "$CODE_VERSION" ]; then
-              REF_SHA=$(yq -r ".backend_code[\"${CODE_VERSION}\"].source_sha" backend_code_manifest.yml)
+              REF_SHA=$(yq -r ".backend_code[\"${CODE_VERSION}\"].source_sha" "$MANIFEST_BACKEND_CODE")
               [ "$REF_SHA" = "null" ] && REF_SHA=""
             fi
             if [ -z "$REF_SHA" ]; then
@@ -235,11 +239,11 @@ jobs:
 
           IMG_SHA=""
           if [ "$IMG" = "true" ]; then
-            IMG_SHA=$(yq -r ".backend[\"${RELEASE_VERSION}\"].source_sha" backend_version_manifest.yml)
+            IMG_SHA=$(yq -r ".backend[\"${RELEASE_VERSION}\"].source_sha" "$MANIFEST_BACKEND_IMAGE")
             if [ "$IMG_SHA" = "null" ]; then IMG_SHA=""; fi
           fi
 
-          MANIFEST="backend_deploy_manifest.yml"
+          MANIFEST="$MANIFEST_BACKEND_DEPLOY"
           jq -n \
             --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg dt "$DEPLOY_TYPE" \
@@ -280,7 +284,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$BRANCH"
-          git add backend_deploy_manifest.yml
+          git add "$MANIFEST_BACKEND_DEPLOY"
           git commit -m "chore(backend): record production deploy ${RELEASE_VERSION}"
           git push origin "$BRANCH"
           BODY_FILE=$(mktemp)

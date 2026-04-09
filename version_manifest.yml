@@ -1,6 +1,0 @@
----
-# Build manifest index for traceability.
-# Service-specific manifests are split to avoid PR conflicts.
-
-frontend_manifest_path: "frontend_version_manifest.yml"
-backend_manifest_path: "backend_version_manifest.yml"

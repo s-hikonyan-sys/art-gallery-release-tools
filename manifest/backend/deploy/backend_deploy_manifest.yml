@@ -1,0 +1,9 @@
+---
+# Backend production deploy history (Deploy Backend workflow appends on success).
+# deploy_type: code | image | both
+# release_version: イメージタグ（GHCR / manifest/backend/image/backend_version_manifest.yml のキー）
+# code_version: コードマニフェストのキー（任意。未指定時は backend_ref 運用）
+# ref_commit_sha: コード側のコミット（manifest/backend/code/backend_code_manifest.yml または git ls-remote）
+# image_source_sha: イメージビルド時のソースコミット（manifest/backend/image/backend_version_manifest.yml）
+
+backend_deployments: []

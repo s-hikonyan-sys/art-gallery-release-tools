@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       code_version:
-        description: 'コードバージョンのラベル（backend_code_manifest.yml のキー。未指定時は vars.RELEASE_VERSION。例: 1.0.0）'
+        description: 'コードバージョンのラベル（manifest/backend/code/backend_code_manifest.yml のキー。未指定時は vars.RELEASE_VERSION。例: 1.0.0）'
         required: false
         type: string
       backend_ref:
@@ -79,7 +79,7 @@ jobs:
               "registered_by_workflow": strenv(GITHUB_WORKFLOW),
               "registered_at_utc": strenv(REGISTERED_AT)
             }
-          ' backend_code_manifest.yml
+          ' manifest/backend/code/backend_code_manifest.yml
         env:
           CODE_VERSION: ${{ env.CODE_VERSION }}
           BACKEND_REF: ${{ env.BACKEND_REF }}
@@ -97,7 +97,7 @@ jobs:
           delete-branch: true
           title: "chore: register backend code version ${{ env.CODE_VERSION }}"
           body: |
-            Update `backend_code_manifest.yml`.
+            Update `manifest/backend/code/backend_code_manifest.yml`.
 
             - code_version: `${{ env.CODE_VERSION }}`
             - ref: `${{ env.BACKEND_REF }}`

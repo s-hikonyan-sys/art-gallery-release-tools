@@ -1,0 +1,8 @@
+---
+# Build manifest index for traceability.
+# Files live under manifest/<service>/<kind>/ to reduce root clutter and PR conflicts.
+
+frontend_manifest_path: "manifest/frontend/image/frontend_version_manifest.yml"
+backend_image_manifest_path: "manifest/backend/image/backend_version_manifest.yml"
+backend_code_manifest_path: "manifest/backend/code/backend_code_manifest.yml"
+backend_deploy_manifest_path: "manifest/backend/deploy/backend_deploy_manifest.yml"
