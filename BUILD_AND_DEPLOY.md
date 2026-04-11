@@ -15,6 +15,9 @@ frontend_manifest_path: "manifest/frontend/image/frontend_version_manifest.yml"
 backend_image_manifest_path: "manifest/backend/image/backend_version_manifest.yml"
 backend_code_manifest_path: "manifest/backend/code/backend_code_manifest.yml"
 backend_deploy_manifest_path: "manifest/backend/deploy/backend_deploy_manifest.yml"
+secrets_image_manifest_path: "manifest/secrets/image/secrets_version_manifest.yml"
+secrets_code_manifest_path: "manifest/secrets/code/secrets_code_manifest.yml"
+secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.yml"
 ```
 
 - **Database（SQL）**: **SQL の版管理を release-tools のマニフェストで二重に持たない**方針です。スキーマの正は **`art-gallery-database` のディレクトリ（例: `migrations/v…/`）と、実行後の DB 側 `schema_migrations`** です。release-tools に SQL 専用のマニフェストは置きません。
@@ -29,9 +32,9 @@ backend_deploy_manifest_path: "manifest/backend/deploy/backend_deploy_manifest.y
 |:---|:---:|:---:|:---|
 | **Backend** | `build_backend.yml` | `deploy_backend.yml` | **○** `manifest/backend/image/backend_version_manifest.yml`（イメージ） / `manifest/backend/code/backend_code_manifest.yml`（コード版・`register_backend_code.yml` が更新） / `manifest/backend/deploy/backend_deploy_manifest.yml`（本番デプロイ履歴） |
 | **Frontend** | `build_frontend.yml` | `deploy_frontend.yml` | **○** `manifest/frontend/image/frontend_version_manifest.yml`（ビルド記録・PR 更新）。デプロイは **GitHub Actions の Artifact**（`frontend-dist-<version>`）を名前で解決 |
+| **Secrets API** | `build_secrets.yml` | `deploy_secrets.yml` | **○** `manifest/secrets/image/secrets_version_manifest.yml`（イメージ） / `manifest/secrets/code/secrets_code_manifest.yml`（コード版・`register_secrets_code.yml` が更新） / `manifest/secrets/deploy/secrets_deploy_manifest.yml`（本番デプロイ履歴） |
 | **Database** | `build_database.yml` | `deploy_database.yml` | **△** イメージは `release_version`（リポジトリ変数または入力）でタグ付け。**SQL の版は DB リポジトリ＋`schema_migrations` が正**（下記「Database」） |
 | **Nginx** | `build_nginx.yml` | `deploy_nginx.yml` / `reload_nginx.yml` | **△** 専用のバージョンマニフェスト YAML はなく、`release_version` と `nginx_ref` 等で運用 |
-| **Secrets API** | `build_secrets.yml` | `deploy_secrets.yml` | **△** 同上（専用マニフェストファイルなし、`release_version` + `secrets_ref`） |
 
 ---
 
@@ -58,39 +61,46 @@ backend_deploy_manifest_path: "manifest/backend/deploy/backend_deploy_manifest.y
 
 ---
 
-## 5. Database
+## 5. Secrets API
 
-### 5.1 マニフェストで SQL を二重管理しない理由
+- **イメージビルド**: `build_secrets.yml` → GHCR プッシュ後、`manifest/secrets/image/secrets_version_manifest.yml` 更新の PR。
+- **コード版の登録**: `register_secrets_code.yml` → `manifest/secrets/code/secrets_code_manifest.yml` 更新の PR。
+- **デプロイ**: `deploy_secrets.yml` の入力 `run_deploy_image` / `run_deploy_code`、`release_version`、`code_version`（任意）、`secrets_ref` など。**イメージ更新時**は `release_version` が `manifest/secrets/image/secrets_version_manifest.yml` に存在する必要があります。
+- **履歴**: デプロイ成功後に `manifest/secrets/deploy/secrets_deploy_manifest.yml` が追記されます。
+
+---
+
+## 6. Database
+
+### 6.1 マニフェストで SQL を二重管理しない理由
 
 - マイグレーションスクリプトの所在・順序は **`art-gallery-database`** がソース・オブ・トゥルースです。
 - 適用済みバージョンは DB の **`schema_migrations`**（またはプロジェクトで採用している同等メカニズム）で管理します。
 - release-tools に **SQL 版専用のマニフェスト**を増やすと、DB リポジトリと不整合になりやすいため **作りません**。
 
-### 5.2 ビルド・デプロイで使うもの
+### 6.2 ビルド・デプロイで使うもの
 
 - **イメージ**: `build_database.yml` が Postgres 系イメージをビルドし、タグは `release_version`（未指定時はリポジトリ変数 `RELEASE_VERSION`）に合わせます。
 - **デプロイ**: `deploy_database.yml` の `run_deploy_image` / `run_deploy_code` / `run_deploy_migrations`、`database_ref`、`database_target_version` など。Ansible 経由でサーバー上のリポジトリ取得・マイグレーション実行に使われます。
 
-### 5.3 ワークフロー上の注意（入力検証）
+### 6.3 ワークフロー上の注意（入力検証）
 
 - 現状の `deploy_database.yml` では、**`run_deploy_image` または `run_deploy_migrations` の少なくとも一方を `true`** にしないと検証エラーになります。コード（マイグレーション以外）のみ更新する場合の扱いは、運用に合わせて入力の組み合わせを確認してください。
 
 ---
 
-## 6. その他のワークフロー（参照）
+## 7. その他のワークフロー（参照）
 
 | 目的 | ワークフロー |
 |:---|:---|
 | Nginx イメージビルド | `build_nginx.yml` |
-| Secrets API イメージビルド | `build_secrets.yml` |
 | Nginx デプロイ | `deploy_nginx.yml` |
-| Secrets API デプロイ | `deploy_secrets.yml` |
 | Nginx のみリロード | `reload_nginx.yml` |
 | 起動サービス設定 | `setup_startup_service.yml` |
 
 ---
 
-## 7. 関連ファイル一覧（マニフェスト）
+## 8. 関連ファイル一覧（マニフェスト）
 
 | ファイル | 内容 |
 |:---|:---|
@@ -99,5 +109,8 @@ backend_deploy_manifest_path: "manifest/backend/deploy/backend_deploy_manifest.y
 | `manifest/backend/code/backend_code_manifest.yml` | バックエンド **コード版**ラベル ↔ ソース SHA 等 |
 | `manifest/backend/deploy/backend_deploy_manifest.yml` | 本番デプロイ履歴 |
 | `manifest/frontend/image/frontend_version_manifest.yml` | フロント **ビルド**の記録（Artifact 名・ソース SHA 等） |
+| `manifest/secrets/image/secrets_version_manifest.yml` | Secrets API **イメージ**タグ ↔ ソース SHA 等 |
+| `manifest/secrets/code/secrets_code_manifest.yml` | Secrets API **コード版**ラベル ↔ ソース SHA 等 |
+| `manifest/secrets/deploy/secrets_deploy_manifest.yml` | Secrets API 本番デプロイ履歴 |
 
 SQL 用の追加マニフェストは **置かない**（上記 Database 節の方針）。
