@@ -1,0 +1,67 @@
+name: 'Create deploy manifest PR'
+description: >
+  Commits a single manifest file change and opens a pull request.
+  Use after updating the deploy-history YAML (e.g. backend_deploy_manifest.yml).
+
+inputs:
+  token:
+    description: 'Token with contents:write and pull-requests:write (typically secrets.GITHUB_TOKEN).'
+    required: true
+  manifest_path:
+    description: 'Repository-relative path to the manifest file to commit.'
+    required: true
+  service_name:
+    description: 'Short name for branch / commit / PR title (e.g. backend, secrets).'
+    required: true
+  release_version:
+    description: 'Release or image tag shown in commit message and PR body.'
+    required: true
+  code_version:
+    description: 'Optional code-version label for the PR body.'
+    required: false
+    default: ''
+  base_branch:
+    description: 'Base branch for the PR (pass github.event.repository.default_branch from the workflow).'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Commit manifest and open pull request
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        MANIFEST_PATH="${{ inputs.manifest_path }}"
+        SERVICE_NAME="${{ inputs.service_name }}"
+        RELEASE_VERSION="${{ inputs.release_version }}"
+        CODE_VERSION="${{ inputs.code_version }}"
+        BASE_BRANCH="${{ inputs.base_branch }}"
+        RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+        if [ ! -f "$MANIFEST_PATH" ]; then
+          echo "::error::Manifest not found: ${MANIFEST_PATH}"
+          exit 1
+        fi
+
+        BRANCH="chore/${SERVICE_NAME}-deploy-record-${GITHUB_RUN_ID}"
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git checkout -b "$BRANCH"
+        git add "$MANIFEST_PATH"
+        git commit -m "chore(${SERVICE_NAME}): record production deploy ${RELEASE_VERSION}"
+        git push origin "$BRANCH"
+
+        BODY_FILE=$(mktemp)
+        {
+          echo "Deploy workflow run: ${RUN_URL}"
+          echo ""
+          echo "- release_version: \`${RELEASE_VERSION}\`"
+          echo "- code_version: \`${CODE_VERSION:-"(none)"}\`"
+        } > "$BODY_FILE"
+        gh pr create \
+          --title "chore(${SERVICE_NAME}): record production deploy ${RELEASE_VERSION}" \
+          --body-file "$BODY_FILE" \
+          --base "$BASE_BRANCH"
+        rm -f "$BODY_FILE"

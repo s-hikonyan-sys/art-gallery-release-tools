@@ -179,6 +179,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      MANIFEST_BACKEND_IMAGE: manifest/backend/image/backend_version_manifest.yml
+      MANIFEST_BACKEND_CODE: manifest/backend/code/backend_code_manifest.yml
+      MANIFEST_BACKEND_DEPLOY: manifest/backend/deploy/backend_deploy_manifest.yml
 
     steps:
       - name: Checkout art-gallery-release-tools repository
@@ -271,31 +275,11 @@ jobs:
           rm -f /tmp/deploy_entry.yml
 
       - name: Create pull request
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          RELEASE_VERSION="${{ github.event.inputs.release_version }}"
-          if [ -z "$RELEASE_VERSION" ]; then
-            RELEASE_VERSION="${{ vars.RELEASE_VERSION }}"
-          fi
-          CV="${{ github.event.inputs.code_version }}"
-          BRANCH="chore/backend-deploy-record-${{ github.run_id }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-          git add "$MANIFEST_BACKEND_DEPLOY"
-          git commit -m "chore(backend): record production deploy ${RELEASE_VERSION}"
-          git push origin "$BRANCH"
-          BODY_FILE=$(mktemp)
-          {
-            echo "Deploy workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            echo ""
-            echo "- release_version: \`${RELEASE_VERSION}\`"
-            echo "- code_version: \`${CV:-"(none)"}\`"
-          } > "$BODY_FILE"
-          gh pr create \
-            --title "chore(backend): record production deploy ${RELEASE_VERSION}" \
-            --body-file "$BODY_FILE" \
-            --base "${{ github.event.repository.default_branch }}"
-          rm -f "$BODY_FILE"
+        uses: ./.github/actions/create-deploy-manifest-pr
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          manifest_path: ${{ env.MANIFEST_BACKEND_DEPLOY }}
+          service_name: backend
+          release_version: ${{ github.event.inputs.release_version || vars.RELEASE_VERSION }}
+          code_version: ${{ github.event.inputs.code_version }}
+          base_branch: ${{ github.event.repository.default_branch }}
