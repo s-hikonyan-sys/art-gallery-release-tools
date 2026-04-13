@@ -1,0 +1,95 @@
+name: 'Create build manifest PR'
+description: >
+  Updates a build manifest file and creates a pull request.
+  Use after a service image build (e.g., build_backend.yml, build_frontend.yml, build_secrets.yml).
+
+inputs:
+  token:
+    description: 'GitHub Token with contents:write and pull-requests:write (e.g., secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS).'
+    required: true
+  manifest_path:
+    description: 'Repository-relative path to the build manifest file to update (e.g., manifest/backend/image/backend_version_manifest.yml).'
+    required: true
+  service_name:
+    description: 'Short name for branch / commit / PR title (e.g., backend, frontend, secrets).'
+    required: true
+  image_tag:
+    description: 'Image tag or release version for the build.'
+    required: true
+  source_ref:
+    description: 'Source ref (branch/tag/sha) used for the build.'
+    required: true
+  source_sha:
+    description: 'Source commit SHA used for the build.'
+    required: true
+  image_full_name:
+    description: 'Full image name (e.g., ghcr.io/owner/repo/image_name).'
+    required: true
+  build_run_id:
+    description: 'ID of the GitHub Actions run that performed the build.'
+    required: true
+  build_workflow:
+    description: 'Name of the GitHub Actions workflow that performed the build.'
+    required: true
+  base_branch:
+    description: 'Base branch for the PR (pass github.event.repository.default_branch from the workflow).'
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Configure Git
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+    - name: Install yq
+      shell: bash
+      run: |
+        if ! command -v yq &> /dev/null; then
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+        fi
+
+    - name: Update version manifest
+      shell: bash
+      working-directory: release-tools-manifest # Assumes the release-tools repo is checked out here
+      run: |
+        UPDATED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+        yq eval -i '
+          .{{ inputs.service_name }}[strenv(IMAGE_TAG)] = {
+            "source_ref": strenv(SOURCE_REF),
+            "source_sha": strenv(SOURCE_SHA),
+            "image": strenv(IMAGE_FULL_NAME) + ":" + strenv(IMAGE_TAG),
+            "build_run_id": strenv(BUILD_RUN_ID),
+            "build_workflow": strenv(BUILD_WORKFLOW),
+            "updated_at_utc": strenv(UPDATED_AT)
+          }
+        ' ${{ inputs.manifest_path }}
+      env:
+        IMAGE_TAG: ${{ inputs.image_tag }}
+        SOURCE_REF: ${{ inputs.source_ref }}
+        SOURCE_SHA: ${{ inputs.source_sha }}
+        IMAGE_FULL_NAME: ${{ inputs.image_full_name }}
+        BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        BUILD_WORKFLOW: ${{ inputs.build_workflow }}
+
+    - name: Create PR for manifest update
+      uses: peter-evans/create-pull-request@v7
+      with:
+        token: ${{ inputs.token }}
+        path: release-tools-manifest # Action runs from root, path specifies where the repo was checked out
+        commit-message: "chore: record ${{ inputs.service_name }} build manifest ${{ inputs.image_tag }}"
+        branch: "chore/manifest-${{ inputs.service_name }}-${{ inputs.image_tag }}-${{ github.run_id }}"
+        delete-branch: true
+        title: "chore: record ${{ inputs.service_name }} build manifest ${{ inputs.image_tag }}"
+        body: |
+          Update `${{ inputs.manifest_path }}` for ${{ inputs.service_name }} build.
+
+          - version: `${{ inputs.image_tag }}`
+          - ref: `${{ inputs.source_ref }}`
+          - source sha: `${{ inputs.source_sha }}`
+          - image: `${{ inputs.image_full_name }}:${{ inputs.image_tag }}`
+          - run id: `${{ inputs.build_run_id }}`
+        base: ${{ inputs.base_branch }}

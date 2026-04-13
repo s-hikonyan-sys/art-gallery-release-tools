@@ -108,19 +108,15 @@ jobs:
           GITHUB_WORKFLOW: ${{ github.workflow }}
 
       - name: Create PR for frontend manifest update
-        uses: peter-evans/create-pull-request@v7
+        uses: ./.github/actions/create-build-manifest-pr
         with:
           token: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}
-          path: release-tools-manifest
-          commit-message: "chore: record frontend build manifest ${{ env.RELEASE_VERSION }}"
-          branch: "chore/manifest-frontend-${{ env.RELEASE_VERSION }}-${{ github.run_id }}"
-          delete-branch: true
-          title: "chore: record frontend build manifest ${{ env.RELEASE_VERSION }}"
-          body: |
-            Update `manifest/frontend/image/frontend_version_manifest.yml` for frontend build.
-
-            - version: `${{ env.RELEASE_VERSION }}`
-            - ref: `${{ env.FRONTEND_REF }}`
-            - source sha: `${{ env.FRONTEND_SOURCE_SHA }}`
-            - run id: `${{ github.run_id }}`
-          base: main
+          manifest_path: manifest/frontend/image/frontend_version_manifest.yml
+          service_name: frontend
+          image_tag: ${{ env.RELEASE_VERSION }}
+          source_ref: ${{ env.FRONTEND_REF }}
+          source_sha: ${{ env.FRONTEND_SOURCE_SHA }}
+          image_full_name: s-hikonyan-sys/art-gallery-frontend # frontendはGHCRにpushしないため、イメージ名は仮のもの
+          build_run_id: ${{ github.run_id }}
+          build_workflow: ${{ github.workflow }}
+          base_branch: ${{ github.event.repository.default_branch }}
