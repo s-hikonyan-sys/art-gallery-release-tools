@@ -58,7 +58,7 @@ runs:
       run: |
         UPDATED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
         yq eval -i '
-          .{{ inputs.service_name }}[strenv(IMAGE_TAG)] = {
+          .[strenv(SERVICE_NAME)][strenv(IMAGE_TAG)] = {
             "source_ref": strenv(SOURCE_REF),
             "source_sha": strenv(SOURCE_SHA),
             "image": strenv(IMAGE_FULL_NAME) + ":" + strenv(IMAGE_TAG),
@@ -68,6 +68,7 @@ runs:
           }
         ' ${{ inputs.manifest_path }}
       env:
+        SERVICE_NAME: ${{ inputs.service_name }}
         IMAGE_TAG: ${{ inputs.image_tag }}
         SOURCE_REF: ${{ inputs.source_ref }}
         SOURCE_SHA: ${{ inputs.source_sha }}
