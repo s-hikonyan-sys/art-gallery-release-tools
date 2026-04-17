@@ -15,6 +15,7 @@ frontend_manifest_path: "manifest/frontend/image/frontend_version_manifest.yml"
 backend_image_manifest_path: "manifest/backend/image/backend_version_manifest.yml"
 backend_code_manifest_path: "manifest/backend/code/backend_code_manifest.yml"
 backend_deploy_manifest_path: "manifest/backend/deploy/backend_deploy_manifest.yml"
+database_image_manifest_path: "manifest/database/image/database_version_manifest.yml"
 secrets_image_manifest_path: "manifest/secrets/image/secrets_version_manifest.yml"
 secrets_code_manifest_path: "manifest/secrets/code/secrets_code_manifest.yml"
 secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.yml"
@@ -33,7 +34,7 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 | **Backend** | `build_backend.yml` | `deploy_backend.yml` | **○** `manifest/backend/image/backend_version_manifest.yml`（イメージ） / `manifest/backend/code/backend_code_manifest.yml`（コード版・`register_backend_code.yml` が更新） / `manifest/backend/deploy/backend_deploy_manifest.yml`（本番デプロイ履歴） |
 | **Frontend** | `build_frontend.yml` | `deploy_frontend.yml` | **○** `manifest/frontend/image/frontend_version_manifest.yml`（ビルド記録・PR 更新）。デプロイは **GitHub Actions の Artifact**（`frontend-dist-<version>`）を名前で解決 |
 | **Secrets API** | `build_secrets.yml` | `deploy_secrets.yml` | **○** `manifest/secrets/image/secrets_version_manifest.yml`（イメージ） / `manifest/secrets/code/secrets_code_manifest.yml`（コード版・`register_secrets_code.yml` が更新） / `manifest/secrets/deploy/secrets_deploy_manifest.yml`（本番デプロイ履歴） |
-| **Database** | `build_database.yml` | `deploy_database.yml` | **△** イメージは `release_version`（リポジトリ変数または入力）でタグ付け。**SQL の版は DB リポジトリ＋`schema_migrations` が正**（下記「Database」） |
+| **Database** | `build_database.yml` | `deploy_database.yml` | **○** `manifest/database/image/database_version_manifest.yml`（イメージ）。**SQL の版は DB リポジトリ＋`schema_migrations` が正**（下記「Database」） |
 | **Nginx** | `build_nginx.yml` | `deploy_nginx.yml` / `reload_nginx.yml` | **△** 専用のバージョンマニフェスト YAML はなく、`release_version` と `nginx_ref` 等で運用 |
 
 ---
@@ -80,7 +81,7 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 
 ### 6.2 ビルド・デプロイで使うもの
 
-- **イメージ**: `build_database.yml` が Postgres 系イメージをビルドし、タグは `release_version`（未指定時はリポジトリ変数 `RELEASE_VERSION`）に合わせます。
+- **イメージ**: `build_database.yml` が Postgres 系イメージをビルドし、タグは `release_version`（未指定時はリポジトリ変数 `RELEASE_VERSION`）に合わせます。ビルド成功後は `manifest/database/image/database_version_manifest.yml` 更新の PR を作成します。
 - **デプロイ**: `deploy_database.yml` の `run_deploy_image` / `run_deploy_code` / `run_deploy_migrations`、`database_ref`、`database_target_version` など。Ansible 経由でサーバー上のリポジトリ取得・マイグレーション実行に使われます。
 
 ### 6.3 ワークフロー上の注意（入力検証）
@@ -109,6 +110,7 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 | `manifest/backend/code/backend_code_manifest.yml` | バックエンド **コード版**ラベル ↔ ソース SHA 等 |
 | `manifest/backend/deploy/backend_deploy_manifest.yml` | 本番デプロイ履歴 |
 | `manifest/frontend/image/frontend_version_manifest.yml` | フロント **ビルド**の記録（Artifact 名・ソース SHA 等） |
+| `manifest/database/image/database_version_manifest.yml` | Database **イメージ**タグ ↔ ソース SHA 等 |
 | `manifest/secrets/image/secrets_version_manifest.yml` | Secrets API **イメージ**タグ ↔ ソース SHA 等 |
 | `manifest/secrets/code/secrets_code_manifest.yml` | Secrets API **コード版**ラベル ↔ ソース SHA 等 |
 | `manifest/secrets/deploy/secrets_deploy_manifest.yml` | Secrets API 本番デプロイ履歴 |

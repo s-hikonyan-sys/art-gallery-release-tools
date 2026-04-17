@@ -1,0 +1,5 @@
+---
+# Database build manifest
+# Records release version -> source commit hash mapping.
+
+database: {}

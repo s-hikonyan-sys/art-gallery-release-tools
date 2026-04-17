@@ -6,10 +6,15 @@ on:
         description: 'ビルドするイメージのタグ (例: v1.0.0)'
         required: false
         type: string
+      database_ref:
+        description: 'ビルド対象の database リポジトリの ref (branch/tag/sha)'
+        required: false
+        default: 'main'
+        type: string
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions: { contents: read, packages: write }
+    permissions: { contents: write, packages: write, pull-requests: write }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,10 +25,22 @@ jobs:
       - name: Set Context
         run: |
           VERSION="${{ github.event.inputs.release_version || vars.RELEASE_VERSION }}"
+          if [ -z "$VERSION" ]; then
+            echo "::error::RELEASE_VERSION が定義されていません。"
+            exit 1
+          fi
           echo "POSTGRES_IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
+          DATABASE_REF="${{ github.event.inputs.database_ref || 'main' }}"
+          echo "DATABASE_REF=${DATABASE_REF}" >> $GITHUB_ENV
           GITHUB_OWNER=$(yq '.github_owner' ansible/group_vars/all.yml)
           GHCR_BASE_REGISTRY=$(yq '.ghcr_base_registry' ansible/group_vars/all.yml)
           POSTGRES_REPO_NAME=$(yq '.service_repo_names.postgres' ansible/group_vars/all.yml)
+          DATABASE_SOURCE_SHA=$(git ls-remote "https://x-access-token:${{ secrets.GH_TOKEN_FOR_ART_GALLERY_DATABASE }}@github.com/${GITHUB_OWNER}/art-gallery-database.git" "${DATABASE_REF}" | awk 'NR==1{print $1}')
+          if [ -z "$DATABASE_SOURCE_SHA" ]; then
+            echo "::error::database_ref からコミットSHAを解決できませんでした。"
+            exit 1
+          fi
+          echo "DATABASE_SOURCE_SHA=${DATABASE_SOURCE_SHA}" >> $GITHUB_ENV
           echo "POSTGRES_IMAGE_NAME=${GHCR_BASE_REGISTRY}/${GITHUB_OWNER}/${POSTGRES_REPO_NAME}" >> $GITHUB_ENV
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -39,3 +56,25 @@ jobs:
             --extra-vars '{"target_hosts":"ci-server", "postgres_image_tag":"${{ env.POSTGRES_IMAGE_TAG }}"}' \
             --tags "build-database"
           docker push ${{ env.POSTGRES_IMAGE_NAME }}:${{ env.POSTGRES_IMAGE_TAG }}
+
+      - name: Checkout release-tools for manifest update
+        uses: actions/checkout@v4
+        with:
+          repository: s-hikonyan-sys/art-gallery-release-tools
+          ref: main
+          token: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}
+          path: release-tools-manifest
+
+      - name: Create PR for database manifest update
+        uses: ./.github/actions/create-build-manifest-pr
+        with:
+          token: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}
+          manifest_path: manifest/database/image/database_version_manifest.yml
+          service_name: database
+          image_tag: ${{ env.POSTGRES_IMAGE_TAG }}
+          source_ref: ${{ env.DATABASE_REF }}
+          source_sha: ${{ env.DATABASE_SOURCE_SHA }}
+          image_full_name: ${{ env.POSTGRES_IMAGE_NAME }}
+          build_run_id: ${{ github.run_id }}
+          build_workflow: ${{ github.workflow }}
+          base_branch: ${{ github.event.repository.default_branch }}
