@@ -55,9 +55,9 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 | 場所 | 役割 |
 |:---|:---|
 | **art-gallery-frontend** | CI は **lint・テストまで**（本番ビルドや Artifact 登録・マニフェスト更新は行わない想定）。 |
-| **art-gallery-release-tools** | **`build_frontend.yml`**: 別リポジトリをチェックアウト（トークン使用）→ lint / test / `npm run build` → **Artifact アップロード** → `manifest/frontend/image/frontend_version_manifest.yml` 更新 PR。**`deploy_frontend.yml`**: 同じバージョン名の Artifact を取得してサーバーへ展開。 |
+| **art-gallery-release-tools** | **`build_frontend.yml`**: 別リポジトリをチェックアウト（トークン使用）→ lint / test / `npm run build` → **Artifact アップロード** → 共通アクション `create-build-manifest-pr` で `manifest/frontend/image/frontend_version_manifest.yml`（`artifact_name` 等）更新の PR。**`deploy_frontend.yml`**: 同じバージョン名の Artifact を取得してサーバーへ展開。 |
 
-- フロントの **本番向けビルド・Artifact・マニフェスト** は release-tools に集約し、**機密トークンやマニフェストの更新権限**も release-tools 側のシークレット・ワークフローで管理する方針です。
+- フロントの **本番向けビルド・Artifact・マニフェスト** は release-tools に集約し、**機密トークンやマニフェストの更新権限**も release-tools 側のシークレット・ワークフローで管理する方針です。マニフェストには GHCR イメージではなく **Artifact 名**（`frontend-dist-<version>`）を記録します。
 - デプロイ前に、対象 `release_version` で **`build_frontend.yml` が成功済み**であること（Artifact が残っていること）が必要です。
 
 ---

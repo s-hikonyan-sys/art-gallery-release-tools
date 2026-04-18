@@ -23,8 +23,13 @@ inputs:
     description: 'Source commit SHA used for the build.'
     required: true
   image_full_name:
-    description: 'Full image name (e.g., ghcr.io/owner/repo/image_name).'
-    required: true
+    description: 'Full image name (e.g., ghcr.io/owner/repo/image_name). Ignored when artifact_name is set.'
+    required: false
+    default: ''
+  artifact_name:
+    description: 'If non-empty, record an artifact-style manifest entry (artifact_name only; no image field). Used for frontend builds.'
+    required: false
+    default: ''
   build_run_id:
     description: 'ID of the GitHub Actions run that performed the build.'
     required: true
@@ -56,25 +61,75 @@ runs:
       shell: bash
       working-directory: release-tools-manifest # Assumes the release-tools repo is checked out here
       run: |
+        set -euo pipefail
+        if [ -z "${ARTIFACT_NAME}" ] && [ -z "${IMAGE_FULL_NAME}" ]; then
+          echo "::error::artifact_name または image_full_name のどちらかを指定してください。"
+          exit 1
+        fi
         UPDATED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-        yq eval -i '
-          .[strenv(SERVICE_NAME)][strenv(IMAGE_TAG)] = {
-            "source_ref": strenv(SOURCE_REF),
-            "source_sha": strenv(SOURCE_SHA),
-            "image": strenv(IMAGE_FULL_NAME) + ":" + strenv(IMAGE_TAG),
-            "build_run_id": strenv(BUILD_RUN_ID),
-            "build_workflow": strenv(BUILD_WORKFLOW),
-            "updated_at_utc": strenv(UPDATED_AT)
-          }
-        ' ${{ inputs.manifest_path }}
+        MANIFEST="${{ inputs.manifest_path }}"
+        if [ -n "${ARTIFACT_NAME}" ]; then
+          yq eval -i '
+            .[strenv(SERVICE_NAME)][strenv(IMAGE_TAG)] = {
+              "source_ref": strenv(SOURCE_REF),
+              "source_sha": strenv(SOURCE_SHA),
+              "artifact_name": strenv(ARTIFACT_NAME),
+              "build_run_id": strenv(BUILD_RUN_ID),
+              "build_workflow": strenv(BUILD_WORKFLOW),
+              "updated_at_utc": strenv(UPDATED_AT)
+            }
+          ' "$MANIFEST"
+        else
+          yq eval -i '
+            .[strenv(SERVICE_NAME)][strenv(IMAGE_TAG)] = {
+              "source_ref": strenv(SOURCE_REF),
+              "source_sha": strenv(SOURCE_SHA),
+              "image": strenv(IMAGE_FULL_NAME) + ":" + strenv(IMAGE_TAG),
+              "build_run_id": strenv(BUILD_RUN_ID),
+              "build_workflow": strenv(BUILD_WORKFLOW),
+              "updated_at_utc": strenv(UPDATED_AT)
+            }
+          ' "$MANIFEST"
+        fi
       env:
         SERVICE_NAME: ${{ inputs.service_name }}
         IMAGE_TAG: ${{ inputs.image_tag }}
         SOURCE_REF: ${{ inputs.source_ref }}
         SOURCE_SHA: ${{ inputs.source_sha }}
         IMAGE_FULL_NAME: ${{ inputs.image_full_name }}
+        ARTIFACT_NAME: ${{ inputs.artifact_name }}
         BUILD_RUN_ID: ${{ inputs.build_run_id }}
         BUILD_WORKFLOW: ${{ inputs.build_workflow }}
+
+    - name: Write PR body
+      shell: bash
+      env:
+        MANIFEST_PATH: ${{ inputs.manifest_path }}
+        SERVICE_NAME: ${{ inputs.service_name }}
+        IMAGE_TAG: ${{ inputs.image_tag }}
+        SOURCE_REF: ${{ inputs.source_ref }}
+        SOURCE_SHA: ${{ inputs.source_sha }}
+        IMAGE_FULL_NAME: ${{ inputs.image_full_name }}
+        ARTIFACT_NAME: ${{ inputs.artifact_name }}
+        BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        BODY_FILE=/tmp/create_build_manifest_pr_body.md
+        {
+          echo "Update \`${MANIFEST_PATH}\` for ${SERVICE_NAME} build."
+          echo ""
+          echo "- version: \`${IMAGE_TAG}\`"
+          echo "- ref: \`${SOURCE_REF}\`"
+          echo "- source sha: \`${SOURCE_SHA}\`"
+          if [ -n "${ARTIFACT_NAME}" ]; then
+            echo "- artifact: \`${ARTIFACT_NAME}\`"
+          else
+            echo "- image: \`${IMAGE_FULL_NAME}:${IMAGE_TAG}\`"
+          fi
+          echo "- run id: \`${BUILD_RUN_ID}\`"
+          echo ""
+          echo "Workflow run: ${RUN_URL}"
+        } > "$BODY_FILE"
 
     - name: Create PR for manifest update
       uses: peter-evans/create-pull-request@v7
@@ -85,12 +140,5 @@ runs:
         branch: "chore/manifest-${{ inputs.service_name }}-${{ inputs.image_tag }}-${{ github.run_id }}"
         delete-branch: true
         title: "chore: record ${{ inputs.service_name }} build manifest ${{ inputs.image_tag }}"
-        body: |
-          Update `${{ inputs.manifest_path }}` for ${{ inputs.service_name }} build.
-
-          - version: `${{ inputs.image_tag }}`
-          - ref: `${{ inputs.source_ref }}`
-          - source sha: `${{ inputs.source_sha }}`
-          - image: `${{ inputs.image_full_name }}:${{ inputs.image_tag }}`
-          - run id: `${{ inputs.build_run_id }}`
+        body-path: /tmp/create_build_manifest_pr_body.md
         base: ${{ inputs.base_branch }}
