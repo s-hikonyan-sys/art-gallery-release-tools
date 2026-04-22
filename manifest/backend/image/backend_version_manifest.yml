@@ -7,6 +7,6 @@ backend:
     source_ref: main
     source_sha: 4816aaa74c3262e39aa3caf2e4ae967b697bcb80
     image: ghcr.io/s-hikonyan-sys/art-gallery-backend:1.0.0
-    build_run_id: "24284622251"
+    build_run_id: "24781213450"
     build_workflow: Build Backend Image
     updated_at_utc: ""
