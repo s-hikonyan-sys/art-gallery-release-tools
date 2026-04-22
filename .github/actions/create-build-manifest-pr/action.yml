@@ -59,7 +59,6 @@ runs:
 
     - name: Update version manifest
       shell: bash
-      working-directory: release-tools-manifest # Assumes the release-tools repo is checked out here
       run: |
         set -euo pipefail
         if [ -z "${ARTIFACT_NAME}" ] && [ -z "${IMAGE_FULL_NAME}" ]; then
@@ -135,7 +134,6 @@ runs:
       uses: peter-evans/create-pull-request@v7
       with:
         token: ${{ inputs.token }}
-        path: release-tools-manifest # Action runs from root, path specifies where the repo was checked out
         commit-message: "chore: record ${{ inputs.service_name }} build manifest ${{ inputs.image_tag }}"
         branch: "chore/manifest-${{ inputs.service_name }}-${{ inputs.image_tag }}-${{ github.run_id }}"
         delete-branch: true
