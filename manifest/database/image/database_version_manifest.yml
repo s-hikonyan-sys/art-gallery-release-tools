@@ -7,6 +7,6 @@ database:
     source_ref: main
     source_sha: abb6e9cc0c0e5cf5c248b214b52552f1fc766688
     image: ghcr.io/s-hikonyan-sys/art-gallery-database:1.0.0
-    build_run_id: "24571112258"
+    build_run_id: "24781514106"
     build_workflow: Build Database Image
     updated_at_utc: ""
