@@ -1,0 +1,7 @@
+---
+# nginx-siteguard-base ビルド記録
+# バージョン形式: v{nginx_version}-sg{siteguard_version}
+# 例: v1.26.3-sg8.00-3 (nginx 1.26.3 + SiteGuard Server Edition 8.00 Update3)
+# ビルドワークフロー: build_nginx_base.yml
+
+nginx_base: {}

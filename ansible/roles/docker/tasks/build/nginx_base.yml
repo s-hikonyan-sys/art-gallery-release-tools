@@ -1,0 +1,59 @@
+---
+# nginx-siteguard-base コンテナイメージのビルド
+# nginx をソースからコンパイルし、SiteGuard WAF モジュールを静的に組み込む
+# タグ形式: v{nginx_version}-sg{siteguard_version}
+
+# === 準備 ===
+- name: Create temporary build directory for nginx-siteguard-base
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: nginx-base-build
+  register: nginx_base_build_dir
+  tags:
+    - docker
+    - build-nginx-base
+
+- name: Copy Dockerfile.base to temporary directory
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/roles/nginx/internal/Dockerfile.base"
+    dest: "{{ nginx_base_build_dir.path }}/Dockerfile"
+    mode: '0644'
+  tags:
+    - docker
+    - build-nginx-base
+
+- name: Copy SiteGuard package to build context
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/roles/nginx/internal/{{ siteguard_pkg_filename | mandatory('siteguard_pkg_filename must be provided via extra-vars') }}"
+    dest: "{{ nginx_base_build_dir.path }}/{{ siteguard_pkg_filename }}"
+    mode: '0644'
+  tags:
+    - docker
+    - build-nginx-base
+
+# === ビルド ===
+- name: Build nginx-siteguard-base image
+  community.docker.docker_image:
+    name: "{{ image_names.nginx_base | mandatory('image_names.nginx_base must be set in inventory') }}"
+    tag: "{{ nginx_base_image_tag | mandatory('nginx_base_image_tag must be provided via extra-vars') }}"
+    build:
+      path: "{{ nginx_base_build_dir.path }}"
+      dockerfile: Dockerfile
+      pull: yes
+      args:
+        NGINX_VERSION: "{{ nginx_version | mandatory('nginx_version must be provided via extra-vars') }}"
+        SITEGUARD_PKG: "{{ siteguard_pkg_filename }}"
+    source: build
+    state: present
+  tags:
+    - docker
+    - build-nginx-base
+
+# === 後処理 ===
+- name: Remove temporary build directory for nginx-siteguard-base
+  ansible.builtin.file:
+    path: "{{ nginx_base_build_dir.path }}"
+    state: absent
+  tags:
+    - docker
+    - build-nginx-base

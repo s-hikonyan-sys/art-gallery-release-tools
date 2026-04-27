@@ -1,0 +1,152 @@
+---
+# SiteGuard 初期設定タスク
+# nginx コンテナの初回起動後に一度だけ実行する。
+# タグ: setup-siteguard
+#
+# 実行前提:
+#   - nginx コンテナが running 状態であること
+#   - ansible_vars: siteguard_serial_key, siteguard_support_id, siteguard_password
+#
+# 実行方法（deploy_nginx.yml から setup-siteguard タグを付けて実行）:
+#   ansible-playbook playbook_deploy_nginx.yml --tags setup-siteguard \
+#     --extra-vars "siteguard_serial_key=XXX siteguard_support_id=SS9250099 siteguard_password=XXX"
+
+- name: Check nginx container is running
+  ansible.builtin.shell: |
+    docker inspect --format='{{ "{{.State.Status}}" }}' \
+      {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} 2>/dev/null || echo "not_found"
+  register: nginx_status
+  changed_when: false
+  tags:
+    - nginx
+    - setup-siteguard
+
+- name: Fail if nginx container is not running
+  ansible.builtin.fail:
+    msg: >-
+      nginx コンテナが起動していません（status: {{ nginx_status.stdout }}）。
+      先に deploy_nginx.yml でコンテナをデプロイしてください。
+  when: nginx_status.stdout != "running"
+  tags:
+    - nginx
+    - setup-siteguard
+
+# --- シグネチャ更新 URL をさくらのVPS専用 URL に変更 ---
+- name: Change SiteGuard signature update URL to Sakura VPS URL
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      sed -i \
+        's|LATEST_URL=https://www.jp-secure.com/download/siteguardlite/|LATEST_URL=https://www.jp-secure.com/download/siteguardlite_sp/|g' \
+        /opt/jp-secure/siteguardlite/conf/dbupdate_waf_url.conf
+  register: sg_url_result
+  changed_when: sg_url_result.rc == 0
+  tags:
+    - nginx
+    - setup-siteguard
+
+- name: Verify signature update URL change
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      grep "LATEST_URL" /opt/jp-secure/siteguardlite/conf/dbupdate_waf_url.conf
+  register: sg_url_verify
+  changed_when: false
+  tags:
+    - nginx
+    - setup-siteguard
+
+- name: Show signature update URL
+  ansible.builtin.debug:
+    msg: "シグネチャ更新URL: {{ sg_url_verify.stdout }}"
+  tags:
+    - nginx
+    - setup-siteguard
+
+# --- ライセンス情報を設定ファイルに書き込む ---
+# SiteGuard の設定ファイルにシリアルキーとサポート情報を設定する。
+# web 管理画面（Tomcat）なしで CLI から設定する方法。
+- name: Set SiteGuard license serial key
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      /bin/sh -c "
+        CONF=/opt/jp-secure/siteguardlite/conf/siteguardlite.ini
+        if grep -q '^serial=' \"\$CONF\"; then
+          sed -i 's|^serial=.*|serial={{ siteguard_serial_key | mandatory }}|' \"\$CONF\"
+        else
+          echo 'serial={{ siteguard_serial_key | mandatory }}' >> \"\$CONF\"
+        fi
+      "
+  no_log: true
+  tags:
+    - nginx
+    - setup-siteguard
+
+- name: Set SiteGuard support ID and password for signature updates
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      /bin/sh -c "
+        CONF=/opt/jp-secure/siteguardlite/conf/dbupdate_waf_url.conf
+        # サポートID設定
+        if grep -q '^SUPPORT_ID=' \"\$CONF\"; then
+          sed -i 's|^SUPPORT_ID=.*|SUPPORT_ID={{ siteguard_support_id | mandatory }}|' \"\$CONF\"
+        else
+          echo 'SUPPORT_ID={{ siteguard_support_id | mandatory }}' >> \"\$CONF\"
+        fi
+        # パスワード設定
+        if grep -q '^SUPPORT_PASSWORD=' \"\$CONF\"; then
+          sed -i 's|^SUPPORT_PASSWORD=.*|SUPPORT_PASSWORD={{ siteguard_password | mandatory }}|' \"\$CONF\"
+        else
+          echo 'SUPPORT_PASSWORD={{ siteguard_password | mandatory }}' >> \"\$CONF\"
+        fi
+      "
+  no_log: true
+  tags:
+    - nginx
+    - setup-siteguard
+
+# --- 設定の適用 ---
+- name: Apply SiteGuard configuration (make reconfig)
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      /bin/sh -c "cd /opt/jp-secure/siteguardlite && make reconfig 2>&1 || true"
+  register: sg_reconfig
+  changed_when: sg_reconfig.rc == 0
+  tags:
+    - nginx
+    - setup-siteguard
+
+- name: Show reconfig output
+  ansible.builtin.debug:
+    msg: "{{ sg_reconfig.stdout_lines }}"
+  tags:
+    - nginx
+    - setup-siteguard
+
+# --- 初回シグネチャ更新 ---
+- name: Run initial SiteGuard signature update
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      /opt/jp-secure/siteguardlite/bin/siteguardlite-update 2>&1 || \
+    docker exec {{ container_names.nginx }} \
+      /bin/sh -c "cd /opt/jp-secure/siteguardlite && make update 2>&1"
+  register: sg_update
+  changed_when: sg_update.rc == 0
+  tags:
+    - nginx
+    - setup-siteguard
+
+- name: Show signature update result
+  ansible.builtin.debug:
+    msg: "{{ sg_update.stdout_lines }}"
+  tags:
+    - nginx
+    - setup-siteguard
+
+- name: SiteGuard initial setup completed
+  ansible.builtin.debug:
+    msg: >-
+      SiteGuard 初期設定が完了しました。
+      次のステップ: nginx.conf に SiteGuard include が追加されていることを確認し、
+      nginx -s reload でリロードしてください。
+  tags:
+    - nginx
+    - setup-siteguard

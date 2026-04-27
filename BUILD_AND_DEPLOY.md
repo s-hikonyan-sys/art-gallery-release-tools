@@ -114,5 +114,7 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 | `manifest/secrets/image/secrets_version_manifest.yml` | Secrets API **イメージ**タグ ↔ ソース SHA 等 |
 | `manifest/secrets/code/secrets_code_manifest.yml` | Secrets API **コード版**ラベル ↔ ソース SHA 等 |
 | `manifest/secrets/deploy/secrets_deploy_manifest.yml` | Secrets API 本番デプロイ履歴 |
+| `manifest/nginx/base/nginx_base_version_manifest.yml` | nginx-siteguard-base **ベースイメージ**タグ記録（`v{nginx}-sg{siteguard}` 形式） |
+| `manifest/nginx/image/nginx_version_manifest.yml` | art-gallery-nginx **アプリイメージ**タグ記録（`v{release_version}` 形式） |
 
 SQL 用の追加マニフェストは **置かない**（上記 Database 節の方針）。

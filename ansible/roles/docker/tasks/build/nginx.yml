@@ -1,6 +1,7 @@
 ---
-# Nginx コンテナイメージのビルド
-# nginx:alpine + entrypoint.sh
+# art-gallery-nginx コンテナイメージのビルド（アプリ層）
+# nginx-siteguard-base をベースに entrypoint.sh を追加するのみ。
+# BASE_VERSION（ARG）を渡すことでベースイメージを選択する。
 
 # === 準備 ===
 - name: Create temporary build directory for nginx
@@ -37,7 +38,7 @@
     - build-nginx
 
 # === ビルド ===
-- name: Build nginx container image
+- name: Build nginx container image (app layer)
   community.docker.docker_image:
     name: "{{ image_names.nginx | mandatory('image_names.nginx must be set in inventory') }}"
     tag: "{{ nginx_image_tag | mandatory('nginx_image_tag must be provided via extra-vars') }}"
@@ -45,6 +46,8 @@
       path: "{{ nginx_build_dir.path }}"
       dockerfile: Dockerfile
       pull: yes
+      args:
+        BASE_VERSION: "{{ nginx_base_version | mandatory('nginx_base_version must be provided via extra-vars') }}"
     source: build
     state: present
   tags:

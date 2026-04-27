@@ -59,6 +59,12 @@ secrets_api_url: "http://art-gallery-secrets-api:5000"
 
 # Dockerボリューム名
 docker_volume_postgres_data: "{{ app_name }}_postgres_data"
+docker_volume_siteguard_conf: "{{ app_name }}_siteguard_conf"
+docker_volume_siteguard_sig: "{{ app_name }}_siteguard_sig"
+
+# nginx-siteguard-base イメージ名（2層イメージ戦略のベース層）
+# バージョン形式: v{nginx_version}-sg{siteguard_version} (例: v1.26.3-sg8.00-3)
+nginx_base_image_repo: "nginx-siteguard-base"
 
 # コンテナフィルター名
 container_filter_name: "{{ app_name }}"

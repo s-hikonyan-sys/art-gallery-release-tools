@@ -64,3 +64,36 @@
         tasks_from: container/update/update_nginx_image
       tags:
         - update-nginx-image
+
+    # --- 5. SiteGuard 初期設定（初回のみ: setup-siteguard タグで明示実行）---
+    # 実行条件: nginx コンテナ起動済み、ライセンス情報を extra-vars で渡すこと
+    # 必要 vars: siteguard_serial_key, siteguard_support_id, siteguard_password
+    - name: SiteGuard initial setup (license, signature URL, first update)
+      ansible.builtin.include_role:
+        name: nginx
+        tasks_from: setup_siteguard
+      when: "'setup-siteguard' in ansible_run_tags"
+      tags:
+        - setup-siteguard
+
+    # --- 6. SiteGuard シグネチャ更新（定期メンテ: update-siteguard-signatures タグで実行）---
+    - name: Update SiteGuard signatures
+      ansible.builtin.shell: |
+        docker exec {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} \
+          /opt/jp-secure/siteguardlite/bin/siteguardlite-update 2>&1 || \
+        docker exec {{ container_names.nginx }} \
+          /bin/sh -c "cd /opt/jp-secure/siteguardlite && make update 2>&1"
+      register: sg_update_result
+      changed_when: sg_update_result.rc == 0
+      when: "'update-siteguard-signatures' in ansible_run_tags"
+      tags:
+        - update-siteguard-signatures
+
+    - name: Show SiteGuard signature update result
+      ansible.builtin.debug:
+        msg: "{{ sg_update_result.stdout_lines | default([]) }}"
+      when:
+        - "'update-siteguard-signatures' in ansible_run_tags"
+        - sg_update_result is defined
+      tags:
+        - update-siteguard-signatures

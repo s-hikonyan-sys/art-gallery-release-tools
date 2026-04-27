@@ -1,0 +1,16 @@
+---
+# nginx-siteguard-base コンテナイメージのビルドプレイブック
+# Ubuntu 22.04 + nginx (ソースビルド) + SiteGuard WAF モジュール
+# バージョン形式: v{nginx_version}-sg{siteguard_version} (例: v1.26.3-sg8.00-3)
+
+- name: Build nginx-siteguard-base container image
+  hosts: "{{ target_hosts }}"
+  become: false
+  tasks:
+    - name: Build nginx-siteguard-base image
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: build/nginx_base
+      tags:
+        - docker
+        - build-nginx-base

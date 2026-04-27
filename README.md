@@ -11,6 +11,7 @@
 ## 重要なドキュメント
 
 - **[ビルド・デプロイとバージョン管理](BUILD_AND_DEPLOY.md)**: ビルド／デプロイ手順とマニフェストの役割・配置。
+- **[SiteGuard WAF 運用ガイド](docs/waf/SITEGUARD_OPERATIONS.md)**: Nginx への SiteGuard 統合（2層イメージ戦略）、初回セットアップ、シグネチャ更新、バージョンアップ手順。
 - **[機密情報・暗号化運用ガイド](ansible/vault/README.md)**: GitHub Secrets を活用した事前暗号化フロー、および機密情報配布専用コンテナ（Secrets API）のライフサイクルについての詳細。
 
 ## 特徴
@@ -20,6 +21,7 @@
 - **イメージとコードの分離**: Docker イメージには実行環境（OS・ミドルウェア）のみを内包し、アプリケーションコードはデプロイ時にボリュームマウントで提供する設計を採用しています。
 - **完全手動デプロイ**: 意図しない更新を防ぐため、すべてのデプロイ・ビルド処理は GitHub Actions の `workflow_dispatch` から手動で実行します。「イメージのみの更新」と「コードのみの反映」を独立してトリガー可能です。
 - **集中依存関係管理**: 各アプリケーションの `Dockerfile` や `requirements.txt` などを本リポジトリで一元管理し、実行環境の整合性を保証します。
+- **Nginx WAF（SiteGuard）2層イメージ戦略**: nginx + SiteGuard のコンパイルを `nginx-siteguard-base` に隔離し、アプリ層（`art-gallery-nginx`）は `entrypoint.sh` 追加のみとすることで、通常のリリースビルドを高速化。VPS 経由取得が必要な SiteGuard パッケージは GitHub Release に保管してすべてのビルドを GitHub Actions 上で完結させます。
 
 ## Backend のバージョン管理（マニフェスト）
 
@@ -57,8 +59,11 @@ art-gallery-release-tools/
 │   │   ├── image/backend_version_manifest.yml   # イメージタグ ↔ ソース SHA（build_backend）
 │   │   ├── code/backend_code_manifest.yml       # コード版ラベル ↔ ソース SHA（register_backend_code）
 │   │   └── deploy/backend_deploy_manifest.yml   # 本番デプロイ履歴（deploy_backend）
-│   └── frontend/
-│       └── image/frontend_version_manifest.yml  # フロントビルド記録（build_frontend）
+│   ├── frontend/
+│   │   └── image/frontend_version_manifest.yml  # フロントビルド記録（build_frontend）
+│   └── nginx/
+│       ├── base/nginx_base_version_manifest.yml  # ベースイメージ記録（build_nginx_base）
+│       └── image/nginx_version_manifest.yml      # アプリイメージ記録（build_nginx）
 ├── .github/
 │   ├── actions/
 │   │   └── write-secrets-files/  # カスタムアクション（GitHub Secrets → ファイル出力）
@@ -66,7 +71,10 @@ art-gallery-release-tools/
 │       ├── build_backend.yml     # イメージビルド（workflow_dispatch）
 │       ├── register_backend_code.yml  # コード版マニフェスト登録（workflow_dispatch）
 │       ├── build_database.yml
-│       ├── build_nginx.yml       # nginx イメージ（nginx:alpine + entrypoint）
+│       ├── build_nginx_base.yml  # nginx-siteguard-base ビルド（Ubuntu+nginx+SiteGuard、workflow_dispatch）
+│       ├── build_nginx.yml       # art-gallery-nginx ビルド（base 参照、workflow_dispatch）
+│       ├── setup_siteguard_package.yml  # SiteGuard パッケージを GitHub Release へ格納（初回/更新時）
+│       ├── update_siteguard_signatures.yml  # SiteGuard シグネチャ更新（定期メンテ）
 │       ├── build_secrets.yml
 │       ├── deploy_backend.yml    # コード反映・イメージ更新（workflow_dispatch、マニフェスト参照）
 │       ├── deploy_database.yml
@@ -97,9 +105,9 @@ art-gallery-release-tools/
     │   │   └── tasks/            # deploy.yml
     │   ├── frontend/
     │   │   └── tasks/            # deploy.yml（Artifact DL + 展開）
-    │   ├── nginx/
-    │   │   ├── internal/         # Dockerfile, entrypoint.sh（イメージビルド用）
-    │   │   └── tasks/            # deploy.yml（git pull + reload） / reload.yml（reload のみ）
+│   ├── nginx/
+│   │   ├── internal/         # Dockerfile.base（ベース層）, Dockerfile（アプリ層）, entrypoint.sh
+│   │   └── tasks/            # deploy.yml / reload.yml / setup_siteguard.yml（初期設定・初回のみ）
     │   └── docker/
     │       ├── tasks/            # deploy_compose.yml / setup_startup_service.yml
     │       └── templates/        # docker-compose.yml.j2 / startup.sh.j2 / art-gallery.service.j2

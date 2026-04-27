@@ -1,0 +1,82 @@
+name: Setup SiteGuard Package
+
+# SiteGuard パッケージをさくらのVPS経由でダウンロードし GitHub Release に保存する。
+# さくらのVPS以外からはダウンロードできないため、VPSをダウンロード中継として使用する。
+#
+# 実行タイミング:
+#   - 初回セットアップ時（1回のみ）
+#   - SiteGuard がバージョンアップされた際
+#
+# 実行後: build_nginx_base.yml を実行してベースイメージをビルドする。
+
+on:
+  workflow_dispatch:
+    inputs:
+      siteguard_version:
+        description: 'SiteGuard バージョン文字列（例: 8.00-3）。ファイル名・Releaseタグに使用'
+        required: true
+        default: '8.00-3'
+        type: string
+
+jobs:
+  fetch-package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_deploy_key
+          chmod 600 ~/.ssh/ansible_deploy_key
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Download SiteGuard package on VPS
+        run: |
+          PKG_FILENAME="siteguard-server-edition-${{ github.event.inputs.siteguard_version }}.nginx.x86_64.tar.gz"
+          DOWNLOAD_URL="http://progeny.sakura.ad.jp/siteguard/8.0.0/nginx/${PKG_FILENAME}"
+          ssh -i ~/.ssh/ansible_deploy_key \
+              -o StrictHostKeyChecking=no \
+              "${{ vars.PROD_SSH_USER }}@${{ vars.PROD_HOST }}" \
+              "wget -q -O /tmp/${PKG_FILENAME} '${DOWNLOAD_URL}' && echo 'Download succeeded'"
+          echo "PKG_FILENAME=${PKG_FILENAME}" >> $GITHUB_ENV
+
+      - name: Transfer package from VPS to runner
+        run: |
+          scp -i ~/.ssh/ansible_deploy_key \
+              -o StrictHostKeyChecking=no \
+              "${{ vars.PROD_SSH_USER }}@${{ vars.PROD_HOST }}:/tmp/${{ env.PKG_FILENAME }}" \
+              "./${{ env.PKG_FILENAME }}"
+
+      - name: Delete package from VPS
+        if: always()
+        run: |
+          ssh -i ~/.ssh/ansible_deploy_key \
+              -o StrictHostKeyChecking=no \
+              "${{ vars.PROD_SSH_USER }}@${{ vars.PROD_HOST }}" \
+              "rm -f /tmp/${{ env.PKG_FILENAME }} && echo 'Cleanup done'" || true
+
+      - name: Create GitHub Release (if not exists)
+        run: |
+          gh release view siteguard-packages --repo "${{ github.repository }}" > /dev/null 2>&1 || \
+          gh release create siteguard-packages \
+            --repo "${{ github.repository }}" \
+            --title "SiteGuard Packages" \
+            --notes "SiteGuard Server Edition インストーラーパッケージ。\nさくらのVPS経由でダウンロードし格納。\nbuild_nginx_base.yml から参照される。" \
+            --prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload SiteGuard package to GitHub Release
+        run: |
+          gh release upload siteguard-packages "${{ env.PKG_FILENAME }}" \
+            --repo "${{ github.repository }}" \
+            --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup runner
+        if: always()
+        run: rm -f "${{ env.PKG_FILENAME }}"

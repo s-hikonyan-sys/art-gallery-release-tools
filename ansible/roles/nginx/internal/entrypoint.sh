@@ -1,6 +1,13 @@
 #!/bin/sh
 set -e
 
+# SiteGuard WAF サービスを起動する（nginx モジュールの設定管理・ログ収集）
+# SiteGuard の WAF 機能自体は nginx モジュールとして動作するため、
+# このサービスが起動できなくても nginx は動作する（|| true で継続）
+if [ -x /opt/jp-secure/siteguardlite/bin/siteguardlite ]; then
+    /opt/jp-secure/siteguardlite/bin/siteguardlite start || true
+fi
+
 # 他のコンテナのIPアドレスを取得して/etc/hostsに追加
 # Docker ComposeではDNS解決が機能しない場合があるため、/etc/hostsを使用
 
@@ -18,5 +25,5 @@ if [ -n "$BACKEND_IP" ]; then
     fi
 fi
 
-# Nginxを起動
+# nginx を起動
 exec nginx -g "daemon off;"
