@@ -1,0 +1,7 @@
+---
+# art-gallery-nginx（アプリ層）ビルド記録
+# バージョン形式: v{release_version} (例: v1.0.0)
+# ベースイメージ: nginx-base:{base_version}（art-gallery-nginx-base プライベートリポジトリで管理）
+# ビルドワークフロー: build_nginx.yml
+
+nginx: {}

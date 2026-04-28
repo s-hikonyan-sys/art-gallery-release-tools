@@ -66,14 +66,15 @@ art-gallery-release-tools/
 │       ├── build_backend.yml     # イメージビルド（workflow_dispatch）
 │       ├── register_backend_code.yml  # コード版マニフェスト登録（workflow_dispatch）
 │       ├── build_database.yml
-│       ├── build_nginx.yml       # nginx イメージ（nginx:alpine + entrypoint）
+│       ├── build_nginx.yml       # nginx アプリイメージ（nginx-base + entrypoint）。2層イメージ戦略のLayer 2
 │       ├── build_secrets.yml
 │       ├── deploy_backend.yml    # コード反映・イメージ更新（workflow_dispatch、マニフェスト参照）
 │       ├── deploy_database.yml
 │       ├── deploy_secrets.yml
 │       ├── deploy_frontend.yml        # Artifact 展開 + Nginx リロード（CI 自動トリガー）
-│       ├── deploy_nginx.yml           # nginx.conf 更新 + Nginx リロード（手動）
+│       ├── deploy_nginx.yml           # nginx.conf 更新 + Nginx リロード / WAF初期設定（手動）
 │       ├── reload_nginx.yml           # Nginx ホットリロードのみ（手動）
+│       ├── update_waf_signatures.yml  # WAF シグネチャ手動更新（手動）
 │       └── setup_startup_service.yml  # サーバー再起動時の自動起動サービス設定（手動）
 └── ansible/
     ├── group_vars/all.yml        # 全環境共通変数（デプロイパス、イメージ名等）
@@ -193,10 +194,11 @@ graph TB
         end
 
         subgraph NG_C["nginx  (depends_on: backend started)"]
-            S_NG["nginx:alpine<br/>公式イメージ"]
+            S_NG["nginx-base（ubuntu:22.04）<br/>+ WAF モジュール内蔵（プライベートリポジトリで管理）"]
         end
 
         PG_Vol["postgres_data volume"]
+        WAF_Vol["waf_conf / waf_sig volumes"]
     end
 
     S_SA -.->|"tokens/ 書込 (rw)"| Host_Conf
@@ -210,6 +212,7 @@ graph TB
     S_BE -->|"DB 接続<br/>(取得したパスワードで接続)"| S_PG
     S_NG -.->|"Volume Mount (ro)"| Host_FE
     S_NG -.->|"Volume Mount (ro)"| Host_NG
+    S_NG -.->|"waf_conf / waf_sig（永続化）"| WAF_Vol
     S_NG -->|"Proxy /api"| S_BE
 
     style S_SA fill:#9C27B0,stroke:#6A1B9A,stroke-width:2px,color:#fff
@@ -231,17 +234,19 @@ graph TB
 | art-gallery-secrets | Public | SecretManager、復号 API（Flask） |
 | art-gallery-frontend | Public | Vue.js ソースコード（CI でビルド、Artifact 出力） |
 | art-gallery-nginx | Public | nginx.conf（git pull でサーバーに配置） |
+| art-gallery-nginx-base | **Private** | Nginx ベースイメージ（ubuntu:22.04 + WAF モジュール組込）の Dockerfile・ワークフロー |
 | art-gallery-release-tools | Public | Ansible Playbook、Dockerfile、ワークフロー |
 
 #### ワークフロー（全て workflow_dispatch による手動実行）
 
-- **ビルド**: `build_backend.yml` / `build_database.yml` / `build_secrets.yml` — 各コンポーネントの Docker イメージをビルドし GHCR にプッシュ（backend は `manifest/backend/image/backend_version_manifest.yml` を PR で更新）
+- **ビルド**: `build_backend.yml` / `build_database.yml` / `build_secrets.yml` — 各コンポーネントの Docker イメージをビルドし GHCR にプッシュ（backend は `manifest/backend/image/backend_version_manifest.yml` を PR で更新）  
+  `build_nginx.yml` — **2層イメージ戦略のアプリ層**。プライベートリポジトリの nginx-base をベースに entrypoint.sh を追加し GHCR にプッシュ（`manifest/nginx/image/nginx_version_manifest.yml` を PR で更新）
 - **登録**: `register_backend_code.yml` — 本番に載せるコード版を `manifest/backend/code/backend_code_manifest.yml` に記録（PR）
 - **デプロイ**: `deploy_backend.yml` — Backend のコード反映・イメージ pull/再起動（`release_version` / `code_version` は各マニフェストのキーを参照。成功後 `manifest/backend/deploy/backend_deploy_manifest.yml` を PR で更新）  
   `deploy_database.yml` — postgres-entrypoint.sh を配置し DB マイグレーションを適用  
   `deploy_secrets.yml` — `write-secrets-files` アクションで設定ファイルを生成し Secrets API コンテナを再起動  
   `deploy_frontend.yml` — GitHub Artifact をダウンロードして `dist/frontend/` に展開後、Nginx をホットリロード  
-  `deploy_nginx.yml` — `nginx.conf` を git pull で取得・配置し、`nginx -s reload` でホットリロード
+  `deploy_nginx.yml` — `nginx.conf` を git pull で取得・配置し、`nginx -s reload` でホットリロード。`run_setup_waf=true` で WAF 初期設定も実施可能
 
 ※ `deploy_frontend.yml` / `deploy_nginx.yml` は各リポジトリの CI（`art-gallery-frontend` / `art-gallery-nginx`）が `gh api` 経由で自動トリガーする。
 

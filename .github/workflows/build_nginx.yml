@@ -1,5 +1,11 @@
 name: Build Nginx Image
 
+# art-gallery-nginx イメージをビルドする（2層イメージ戦略のLayer 2）。
+# nginx-base をベースに entrypoint.sh を追加するのみのため高速にビルドできる。
+#
+# 前提: 使用する base_version の nginx-base イメージが GHCR に存在すること。
+#   → art-gallery-nginx-base (Private) の build_nginx_base.yml を先に実行して GHCR に登録する。
+
 on:
   workflow_dispatch:
     inputs:
@@ -7,13 +13,18 @@ on:
         description: 'ビルドするイメージのタグ (例: v1.0.0。未指定時はリポジトリ変数を参照)'
         required: false
         type: string
+      base_version:
+        description: '使用するベースイメージのバージョン（art-gallery-nginx-base の build_nginx_base.yml でビルドしたタグを指定）'
+        required: true
+        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
+      pull-requests: write
 
     steps:
       - name: Checkout art-gallery-release-tools repository
@@ -32,16 +43,17 @@ jobs:
             exit 1
           fi
           echo "NGINX_IMAGE_TAG=${VERSION}" >> $GITHUB_ENV
-          
+          echo "NGINX_BASE_VERSION=${{ github.event.inputs.base_version }}" >> $GITHUB_ENV
+
           GITHUB_OWNER=$(yq '.github_owner' ansible/group_vars/all.yml)
           GHCR_BASE_REGISTRY=$(yq '.ghcr_base_registry' ansible/group_vars/all.yml)
           NGINX_REPO_NAME=$(yq '.service_repo_names.nginx' ansible/group_vars/all.yml)
-          
+
           if [ -z "${GITHUB_OWNER}" ] || [ -z "${GHCR_BASE_REGISTRY}" ] || [ -z "${NGINX_REPO_NAME}" ]; then
             echo "::error::Ansibleのgroup_vars/all.ymlから変数を取得できませんでした。"
             exit 1
           fi
-          
+
           echo "NGINX_IMAGE_NAME=${GHCR_BASE_REGISTRY}/${GITHUB_OWNER}/${NGINX_REPO_NAME}" >> $GITHUB_ENV
 
       - name: Log in to GitHub Container Registry
@@ -62,7 +74,25 @@ jobs:
           cd ansible
           ansible-playbook playbook_build_nginx.yml \
             --inventory inventory/ci.yml \
-            --extra-vars '{"target_hosts":"ci-server", "nginx_image_tag":"${{ env.NGINX_IMAGE_TAG }}"}' \
+            --extra-vars "{
+              \"target_hosts\":\"ci-server\",
+              \"nginx_image_tag\":\"${{ env.NGINX_IMAGE_TAG }}\",
+              \"nginx_base_version\":\"${{ env.NGINX_BASE_VERSION }}\"
+            }" \
             --tags "build-nginx"
-          
+
           docker push ${{ env.NGINX_IMAGE_NAME }}:${{ env.NGINX_IMAGE_TAG }}
+
+      - name: Create PR for nginx manifest update
+        uses: ./.github/actions/create-build-manifest-pr
+        with:
+          token: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}
+          manifest_path: manifest/nginx/image/nginx_version_manifest.yml
+          service_name: nginx
+          image_tag: ${{ env.NGINX_IMAGE_TAG }}
+          source_ref: "base-${{ github.event.inputs.base_version }}"
+          source_sha: ${{ github.sha }}
+          image_full_name: ${{ env.NGINX_IMAGE_NAME }}
+          build_run_id: ${{ github.run_id }}
+          build_workflow: ${{ github.workflow }}
+          base_branch: ${{ github.event.repository.default_branch }}

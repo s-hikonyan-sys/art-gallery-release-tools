@@ -13,6 +13,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_setup_waf:
+        description: '3. [初回のみ] WAF初期設定 (ライセンス登録・シグネチャURL・初回シグネチャ更新)'
+        required: false
+        type: boolean
+        default: false
       release_version:
         description: 'デプロイ対象のリリースバージョン (例: v1.0.0。未指定時はリポジトリ変数を参照)'
         required: false
@@ -52,8 +57,10 @@ jobs:
 
       - name: Validate Inputs
         run: |
-          if [ "${{ github.event.inputs.run_deploy_code }}" != "true" ] && [ "${{ github.event.inputs.run_deploy_image }}" != "true" ]; then
-            echo "::error::'run_deploy_code' または 'run_deploy_image' の少なくとも一方は 'true' に設定してください。"
+          if [ "${{ github.event.inputs.run_deploy_code }}" != "true" ] && \
+             [ "${{ github.event.inputs.run_deploy_image }}" != "true" ] && \
+             [ "${{ github.event.inputs.run_setup_waf }}" != "true" ]; then
+            echo "::error::'run_deploy_code' / 'run_deploy_image' / 'run_setup_waf' の少なくとも一つを 'true' に設定してください。"
             exit 1
           fi
 
@@ -65,6 +72,18 @@ jobs:
           echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Write WAF paths file (gitignored)
+        run: |
+          cat > ansible/group_vars/waf_paths.yml << 'PATHS_EOF'
+          ---
+          waf_install_dir: "${{ secrets.WAF_INSTALL_DIR }}"
+          waf_conf_container_path: "${{ secrets.WAF_CONF_CONTAINER_PATH }}"
+          waf_data_container_path: "${{ secrets.WAF_DATA_CONTAINER_PATH }}"
+          waf_main_conf_filename: "${{ secrets.WAF_MAIN_CONF_FILENAME }}"
+          waf_update_conf_filename: "${{ secrets.WAF_UPDATE_CONF_FILENAME }}"
+          PATHS_EOF
+          chmod 600 ansible/group_vars/waf_paths.yml
+
       - name: Write Ansible extra-vars file
         run: |
           cat > /tmp/ansible_vars.json << 'VARS_EOF'
@@ -75,7 +94,10 @@ jobs:
             "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
             "nginx_ref": "${{ github.event.inputs.nginx_ref }}",
             "nginx_image_tag": "${{ github.event.inputs.release_version || vars.RELEASE_VERSION }}",
-            "github_token_nginx": "${{ secrets['GH_TOKEN_FOR_ART_GALLERY_NGINX'] }}"
+            "github_token_nginx": "${{ secrets['GH_TOKEN_FOR_ART_GALLERY_NGINX'] }}",
+            "waf_serial_key": "${{ secrets.WAF_SERIAL_KEY }}",
+            "waf_support_id": "${{ secrets.WAF_SUPPORT_ID }}",
+            "waf_password": "${{ secrets.WAF_PASSWORD }}"
           }
           VARS_EOF
           chmod 600 /tmp/ansible_vars.json
@@ -94,6 +116,11 @@ jobs:
             TAGS="${TAGS}deploy-compose,update-nginx-image"
           fi
 
+          if [ "${{ github.event.inputs.run_setup_waf }}" == "true" ]; then
+            [ -n "$TAGS" ] && TAGS="$TAGS,"
+            TAGS="${TAGS}setup-waf"
+          fi
+
           if [ -z "$TAGS" ]; then
             echo "::error::デプロイのオプションが選択されていません"
             exit 1
@@ -104,6 +131,8 @@ jobs:
             --extra-vars "@/tmp/ansible_vars.json" \
             --tags "$TAGS"
 
-      - name: Remove extra-vars file
+      - name: Remove sensitive files
         if: always()
-        run: rm -f /tmp/ansible_vars.json
+        run: |
+          rm -f /tmp/ansible_vars.json
+          rm -f ansible/group_vars/waf_paths.yml
