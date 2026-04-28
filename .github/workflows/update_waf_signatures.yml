@@ -38,12 +38,11 @@ jobs:
         run: |
           cat > ansible/group_vars/waf_paths.yml << 'PATHS_EOF'
           ---
+          waf_install_dir: "${{ secrets.WAF_INSTALL_DIR }}"
           waf_conf_container_path: "${{ secrets.WAF_CONF_CONTAINER_PATH }}"
           waf_data_container_path: "${{ secrets.WAF_DATA_CONTAINER_PATH }}"
           waf_main_conf_filename: "${{ secrets.WAF_MAIN_CONF_FILENAME }}"
           waf_update_conf_filename: "${{ secrets.WAF_UPDATE_CONF_FILENAME }}"
-          waf_reconfig_cmd: "${{ secrets.WAF_RECONFIG_CMD }}"
-          waf_update_cmd: "${{ secrets.WAF_UPDATE_CMD }}"
           PATHS_EOF
           chmod 600 ansible/group_vars/waf_paths.yml
 

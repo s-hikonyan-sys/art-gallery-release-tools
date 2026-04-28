@@ -92,7 +92,7 @@
 - name: Apply WAF configuration
   ansible.builtin.shell: |
     docker exec {{ container_names.nginx }} \
-      /bin/sh -c "{{ waf_reconfig_cmd }} 2>&1 || true"
+      /bin/sh -c "cd {{ waf_install_dir | mandatory }} && make reconfig 2>&1 || true"
   register: waf_reconfig
   changed_when: waf_reconfig.rc == 0
   tags:
@@ -110,7 +110,7 @@
 - name: Run initial WAF signature update
   ansible.builtin.shell: |
     docker exec {{ container_names.nginx }} \
-      /bin/sh -c "{{ waf_update_cmd }} 2>&1"
+      /bin/sh -c "cd {{ waf_install_dir | mandatory }} && make update 2>&1"
   register: waf_update
   changed_when: waf_update.rc == 0
   tags:
