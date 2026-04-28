@@ -1,0 +1,74 @@
+name: Update WAF Signatures
+
+# WAF シグネチャを更新する。
+# 定期メンテナンスとして手動実行する（自動更新を使用しない場合）。
+#
+# 前提:
+#   - nginx コンテナが running 状態であること
+#   - WAF 初期設定（ライセンス登録・更新URL設定）が完了していること
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-signatures:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout art-gallery-release-tools repository
+        uses: actions/checkout@v4
+
+      - name: Install Ansible and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+          ansible-galaxy collection install community.docker
+
+      - name: Setup SSH for Production
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_deploy_key
+          chmod 600 ~/.ssh/ansible_deploy_key
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Write WAF paths file (gitignored)
+        run: |
+          cat > ansible/group_vars/waf_paths.yml << 'PATHS_EOF'
+          ---
+          waf_conf_container_path: "${{ secrets.WAF_CONF_CONTAINER_PATH }}"
+          waf_data_container_path: "${{ secrets.WAF_DATA_CONTAINER_PATH }}"
+          waf_main_conf_filename: "${{ secrets.WAF_MAIN_CONF_FILENAME }}"
+          waf_update_conf_filename: "${{ secrets.WAF_UPDATE_CONF_FILENAME }}"
+          waf_reconfig_cmd: "${{ secrets.WAF_RECONFIG_CMD }}"
+          waf_update_cmd: "${{ secrets.WAF_UPDATE_CMD }}"
+          PATHS_EOF
+          chmod 600 ansible/group_vars/waf_paths.yml
+
+      - name: Write Ansible extra-vars file
+        run: |
+          cat > /tmp/ansible_vars.json << 'VARS_EOF'
+          {
+            "target_hosts": "production",
+            "prod_host": "${{ vars.PROD_HOST }}",
+            "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
+            "prod_ssh_key_path": "~/.ssh/ansible_deploy_key"
+          }
+          VARS_EOF
+          chmod 600 /tmp/ansible_vars.json
+
+      - name: Run WAF signature update
+        run: |
+          cd ansible
+          ansible-playbook playbook_deploy_nginx.yml \
+            --inventory inventory/production.yml \
+            --extra-vars "@/tmp/ansible_vars.json" \
+            --tags "update-waf-signatures"
+
+      - name: Remove sensitive files
+        if: always()
+        run: |
+          rm -f /tmp/ansible_vars.json
+          rm -f ansible/group_vars/waf_paths.yml

@@ -1,0 +1,135 @@
+---
+# WAF 初期設定タスク
+# nginx コンテナの初回起動後に一度だけ実行する。
+# タグ: setup-waf
+#
+# 実行前提:
+#   - nginx コンテナが running 状態であること
+#   - ansible_vars: waf_serial_key, waf_support_id, waf_password
+#   - group_vars/waf_paths.yml が配置されていること（GitHub Actions が Secrets から生成）
+#
+# 実行方法（deploy_nginx.yml から setup-waf タグを付けて実行）:
+#   ansible-playbook playbook_deploy_nginx.yml --tags setup-waf \
+#     --extra-vars "waf_serial_key=XXX waf_support_id=XXX waf_password=XXX"
+
+- name: Check nginx container is running
+  ansible.builtin.shell: |
+    docker inspect --format='{{ "{{.State.Status}}" }}' \
+      {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} 2>/dev/null || echo "not_found"
+  register: nginx_status
+  changed_when: false
+  tags:
+    - nginx
+    - setup-waf
+
+- name: Fail if nginx container is not running
+  ansible.builtin.fail:
+    msg: >-
+      nginx コンテナが起動していません（status: {{ nginx_status.stdout }}）。
+      先に deploy_nginx.yml でコンテナをデプロイしてください。
+  when: nginx_status.stdout != "running"
+  tags:
+    - nginx
+    - setup-waf
+
+# --- シグネチャ更新 URL を切り替える ---
+# ベースイメージの環境変数 WAF_UPDATE_URL_SP に切り替え先 URL が設定されている
+- name: Switch WAF signature update URL
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      /bin/sh -c '
+        CONF="{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}"
+        URL="${WAF_UPDATE_URL_SP}"
+        if [ -n "${URL}" ]; then
+          sed -i "s|^LATEST_URL=.*|LATEST_URL=${URL}|" "${CONF}"
+        fi
+      '
+  register: waf_url_result
+  changed_when: waf_url_result.rc == 0
+  tags:
+    - nginx
+    - setup-waf
+
+# --- ライセンス情報を設定する ---
+- name: Set WAF license serial key
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      /bin/sh -c "
+        CONF='{{ waf_conf_container_path }}/{{ waf_main_conf_filename }}'
+        if grep -q '^serial=' \"\$CONF\"; then
+          sed -i 's|^serial=.*|serial={{ waf_serial_key | mandatory }}|' \"\$CONF\"
+        else
+          echo 'serial={{ waf_serial_key | mandatory }}' >> \"\$CONF\"
+        fi
+      "
+  no_log: true
+  tags:
+    - nginx
+    - setup-waf
+
+- name: Set WAF support credentials for signature updates
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      /bin/sh -c "
+        CONF='{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}'
+        if grep -q '^SUPPORT_ID=' \"\$CONF\"; then
+          sed -i 's|^SUPPORT_ID=.*|SUPPORT_ID={{ waf_support_id | mandatory }}|' \"\$CONF\"
+        else
+          echo 'SUPPORT_ID={{ waf_support_id | mandatory }}' >> \"\$CONF\"
+        fi
+        if grep -q '^SUPPORT_PASSWORD=' \"\$CONF\"; then
+          sed -i 's|^SUPPORT_PASSWORD=.*|SUPPORT_PASSWORD={{ waf_password | mandatory }}|' \"\$CONF\"
+        else
+          echo 'SUPPORT_PASSWORD={{ waf_password | mandatory }}' >> \"\$CONF\"
+        fi
+      "
+  no_log: true
+  tags:
+    - nginx
+    - setup-waf
+
+# --- 設定適用 ---
+- name: Apply WAF configuration
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      /bin/sh -c "{{ waf_reconfig_cmd }} 2>&1 || true"
+  register: waf_reconfig
+  changed_when: waf_reconfig.rc == 0
+  tags:
+    - nginx
+    - setup-waf
+
+- name: Show WAF reconfig output
+  ansible.builtin.debug:
+    msg: "{{ waf_reconfig.stdout_lines }}"
+  tags:
+    - nginx
+    - setup-waf
+
+# --- 初回シグネチャ更新 ---
+- name: Run initial WAF signature update
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      /bin/sh -c "{{ waf_update_cmd }} 2>&1"
+  register: waf_update
+  changed_when: waf_update.rc == 0
+  tags:
+    - nginx
+    - setup-waf
+
+- name: Show signature update result
+  ansible.builtin.debug:
+    msg: "{{ waf_update.stdout_lines }}"
+  tags:
+    - nginx
+    - setup-waf
+
+- name: WAF initial setup completed
+  ansible.builtin.debug:
+    msg: >-
+      WAF 初期設定が完了しました。
+      次のステップ: nginx.conf に WAF include が追加されていることを確認し、
+      nginx -s reload でリロードしてください。
+  tags:
+    - nginx
+    - setup-waf

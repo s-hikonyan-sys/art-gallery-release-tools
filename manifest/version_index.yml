@@ -10,3 +10,7 @@ database_image_manifest_path: "manifest/database/image/database_version_manifest
 secrets_image_manifest_path: "manifest/secrets/image/secrets_version_manifest.yml"
 secrets_code_manifest_path: "manifest/secrets/code/secrets_code_manifest.yml"
 secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.yml"
+# Nginx: 2層イメージ戦略
+# nginx_base のビルド記録はプライベートリポジトリ art-gallery-nginx-base で管理
+# nginx_image: entrypoint.sh を追加したアプリ層（バージョン形式: v{release_version}）
+nginx_image_manifest_path: "manifest/nginx/image/nginx_version_manifest.yml"

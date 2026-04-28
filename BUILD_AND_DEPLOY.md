@@ -35,7 +35,8 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 | **Frontend** | `build_frontend.yml` | `deploy_frontend.yml` | **○** `manifest/frontend/image/frontend_version_manifest.yml`（ビルド記録・PR 更新）。デプロイは **GitHub Actions の Artifact**（`frontend-dist-<version>`）を名前で解決 |
 | **Secrets API** | `build_secrets.yml` | `deploy_secrets.yml` | **○** `manifest/secrets/image/secrets_version_manifest.yml`（イメージ） / `manifest/secrets/code/secrets_code_manifest.yml`（コード版・`register_secrets_code.yml` が更新） / `manifest/secrets/deploy/secrets_deploy_manifest.yml`（本番デプロイ履歴） |
 | **Database** | `build_database.yml` | `deploy_database.yml` | **○** `manifest/database/image/database_version_manifest.yml`（イメージ）。**SQL の版は DB リポジトリ＋`schema_migrations` が正**（下記「Database」） |
-| **Nginx** | `build_nginx.yml` | `deploy_nginx.yml` / `reload_nginx.yml` | **△** 専用のバージョンマニフェスト YAML はなく、`release_version` と `nginx_ref` 等で運用 |
+| **Nginx（ベース層）** | `build_nginx_base.yml`（Private リポジトリ） | — | **○**  で管理。バージョン形式はプライベートリポジトリ側で規定 |
+| **Nginx（アプリ層）** | `build_nginx.yml` | `deploy_nginx.yml` / `reload_nginx.yml` | **○** `manifest/nginx/image/nginx_version_manifest.yml`。`release_version`（例: `v1.0.0`）で管理。ベースを使い回すため高速ビルド |
 
 ---
 
@@ -94,7 +95,9 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 
 | 目的 | ワークフロー |
 |:---|:---|
-| Nginx イメージビルド | `build_nginx.yml` |
+| Nginx ベースイメージビルド（Private リポジトリ） | `build_nginx_base.yml`（art-gallery-nginx-base） |
+| Nginx アプリイメージビルド | `build_nginx.yml` |
+| WAF シグネチャ更新 | `update_waf_signatures.yml` |
 | Nginx デプロイ | `deploy_nginx.yml` |
 | Nginx のみリロード | `reload_nginx.yml` |
 | 起動サービス設定 | `setup_startup_service.yml` |
