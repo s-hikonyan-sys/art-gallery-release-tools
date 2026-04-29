@@ -19,6 +19,9 @@ database_image_manifest_path: "manifest/database/image/database_version_manifest
 secrets_image_manifest_path: "manifest/secrets/image/secrets_version_manifest.yml"
 secrets_code_manifest_path: "manifest/secrets/code/secrets_code_manifest.yml"
 secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.yml"
+nginx_image_manifest_path: "manifest/nginx/image/nginx_version_manifest.yml"
+nginx_code_manifest_path: "manifest/nginx/code/nginx_code_manifest.yml"
+nginx_deploy_manifest_path: "manifest/nginx/deploy/nginx_deploy_manifest.yml"
 ```
 
 - **Database（SQL）**: **SQL の版管理を release-tools のマニフェストで二重に持たない**方針です。スキーマの正は **`art-gallery-database` のディレクトリ（例: `migrations/v…/`）と、実行後の DB 側 `schema_migrations`** です。release-tools に SQL 専用のマニフェストは置きません。
@@ -35,8 +38,8 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 | **Frontend** | `build_frontend.yml` | `deploy_frontend.yml` | **○** `manifest/frontend/image/frontend_version_manifest.yml`（ビルド記録・PR 更新）。デプロイは **GitHub Actions の Artifact**（`frontend-dist-<version>`）を名前で解決 |
 | **Secrets API** | `build_secrets.yml` | `deploy_secrets.yml` | **○** `manifest/secrets/image/secrets_version_manifest.yml`（イメージ） / `manifest/secrets/code/secrets_code_manifest.yml`（コード版・`register_secrets_code.yml` が更新） / `manifest/secrets/deploy/secrets_deploy_manifest.yml`（本番デプロイ履歴） |
 | **Database** | `build_database.yml` | `deploy_database.yml` | **○** `manifest/database/image/database_version_manifest.yml`（イメージ）。**SQL の版は DB リポジトリ＋`schema_migrations` が正**（下記「Database」） |
-| **Nginx（ベース層）** | `build_nginx_base.yml`（Private リポジトリ） | — | **○**  で管理。バージョン形式はプライベートリポジトリ側で規定 |
-| **Nginx（アプリ層）** | `build_nginx.yml` | `deploy_nginx.yml` / `reload_nginx.yml` | **○** `manifest/nginx/image/nginx_version_manifest.yml`。`release_version`（例: `v1.0.0`）で管理。ベースを使い回すため高速ビルド |
+| **Nginx（ベース層）** | `build_nginx_base.yml`（Private リポジトリ） | — | **○** Private 側マニフェストで管理（release-tools 管轄外） |
+| **Nginx（アプリ層）** | `build_nginx.yml` | `deploy_nginx.yml` / `reload_nginx.yml` | **○** `manifest/nginx/image/nginx_version_manifest.yml`（イメージ） / `manifest/nginx/code/nginx_code_manifest.yml`（コード版・`register_nginx_code.yml` が更新） / `manifest/nginx/deploy/nginx_deploy_manifest.yml`（本番デプロイ履歴） |
 
 ---
 
@@ -97,6 +100,7 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 |:---|:---|
 | Nginx ベースイメージビルド（Private リポジトリ） | `build_nginx_base.yml`（art-gallery-nginx-base） |
 | Nginx アプリイメージビルド | `build_nginx.yml` |
+| Nginx コード版の登録 | `register_nginx_code.yml` |
 | WAF シグネチャ更新 | `update_waf_signatures.yml` |
 | Nginx デプロイ | `deploy_nginx.yml` |
 | Nginx のみリロード | `reload_nginx.yml` |
@@ -117,5 +121,8 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 | `manifest/secrets/image/secrets_version_manifest.yml` | Secrets API **イメージ**タグ ↔ ソース SHA 等 |
 | `manifest/secrets/code/secrets_code_manifest.yml` | Secrets API **コード版**ラベル ↔ ソース SHA 等 |
 | `manifest/secrets/deploy/secrets_deploy_manifest.yml` | Secrets API 本番デプロイ履歴 |
+| `manifest/nginx/image/nginx_version_manifest.yml` | Nginx（アプリ層）**イメージ**タグ ↔ ソース SHA 等 |
+| `manifest/nginx/code/nginx_code_manifest.yml` | Nginx **コード版**ラベル ↔ ソース SHA 等 |
+| `manifest/nginx/deploy/nginx_deploy_manifest.yml` | Nginx 本番デプロイ履歴 |
 
 SQL 用の追加マニフェストは **置かない**（上記 Database 節の方針）。

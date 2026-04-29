@@ -1,0 +1,106 @@
+name: Register Nginx Code Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      code_version:
+        description: 'コードバージョンのラベル（manifest/nginx/code/nginx_code_manifest.yml のキー。未指定時は vars.RELEASE_VERSION。例: v1.0.0）'
+        required: false
+        type: string
+      nginx_ref:
+        description: '登録する nginx リポジトリの ref (branch/tag/sha)'
+        required: false
+        default: 'main'
+        type: string
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout art-gallery-release-tools repository
+        uses: actions/checkout@v4
+
+      - name: Install yq (YAML processor)
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Set Context
+        run: |
+          GITHUB_OWNER=$(yq -r '.github_owner' ansible/group_vars/all.yml)
+          NGINX_REPO_NAME=$(yq -r '.service_repo_names.nginx' ansible/group_vars/all.yml)
+          if [ -z "${GITHUB_OWNER}" ] || [ "${GITHUB_OWNER}" = "null" ] || [ -z "${NGINX_REPO_NAME}" ] || [ "${NGINX_REPO_NAME}" = "null" ]; then
+            echo "::error::group_vars/all.yml から github_owner / nginx リポジトリ名を取得できませんでした。"
+            exit 1
+          fi
+          echo "GITHUB_OWNER=${GITHUB_OWNER}" >> $GITHUB_ENV
+          echo "NGINX_REPO_NAME=${NGINX_REPO_NAME}" >> $GITHUB_ENV
+
+          CODE_VERSION="${{ github.event.inputs.code_version || vars.RELEASE_VERSION }}"
+          if [ -z "$CODE_VERSION" ]; then
+            echo "::error::code_version（入力）または vars.RELEASE_VERSION が必要です。"
+            exit 1
+          fi
+          NGINX_REF="${{ github.event.inputs.nginx_ref }}"
+
+          NGINX_SOURCE_SHA=$(git ls-remote \
+            "https://x-access-token:${{ secrets.GH_TOKEN_FOR_ART_GALLERY_NGINX }}@github.com/${GITHUB_OWNER}/${NGINX_REPO_NAME}.git" \
+            "${NGINX_REF}" | awk 'NR==1{print $1}')
+
+          if [ -z "$NGINX_SOURCE_SHA" ]; then
+            echo "::error::nginx_ref からコミットSHAを解決できませんでした。"
+            exit 1
+          fi
+
+          echo "CODE_VERSION=${CODE_VERSION}" >> $GITHUB_ENV
+          echo "NGINX_REF=${NGINX_REF}" >> $GITHUB_ENV
+          echo "NGINX_SOURCE_SHA=${NGINX_SOURCE_SHA}" >> $GITHUB_ENV
+
+      - name: Checkout release-tools for manifest update
+        uses: actions/checkout@v4
+        with:
+          repository: s-hikonyan-sys/art-gallery-release-tools
+          ref: main
+          token: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}
+          path: release-tools-manifest
+
+      - name: Update code manifest (nginx)
+        working-directory: release-tools-manifest
+        run: |
+          REGISTERED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          yq eval -i '
+            .nginx_code[strenv(CODE_VERSION)] = {
+              "source_ref": strenv(NGINX_REF),
+              "source_sha": strenv(NGINX_SOURCE_SHA),
+              "registered_by_run_id": strenv(GITHUB_RUN_ID),
+              "registered_by_workflow": strenv(GITHUB_WORKFLOW),
+              "registered_at_utc": strenv(REGISTERED_AT)
+            }
+          ' manifest/nginx/code/nginx_code_manifest.yml
+        env:
+          CODE_VERSION: ${{ env.CODE_VERSION }}
+          NGINX_REF: ${{ env.NGINX_REF }}
+          NGINX_SOURCE_SHA: ${{ env.NGINX_SOURCE_SHA }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
+
+      - name: Create PR for code manifest update
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}
+          path: release-tools-manifest
+          commit-message: "chore: register nginx code version ${{ env.CODE_VERSION }}"
+          branch: "chore/manifest-nginx-code-${{ env.CODE_VERSION }}-${{ github.run_id }}"
+          delete-branch: true
+          title: "chore: register nginx code version ${{ env.CODE_VERSION }}"
+          body: |
+            Update `manifest/nginx/code/nginx_code_manifest.yml`.
+
+            - code_version: `${{ env.CODE_VERSION }}`
+            - ref: `${{ env.NGINX_REF }}`
+            - source sha: `${{ env.NGINX_SOURCE_SHA }}`
+            - run id: `${{ github.run_id }}`
+          base: main

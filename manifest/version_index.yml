@@ -14,3 +14,5 @@ secrets_deploy_manifest_path: "manifest/secrets/deploy/secrets_deploy_manifest.y
 # nginx_base のビルド記録はプライベートリポジトリ art-gallery-nginx-base で管理
 # nginx_image: entrypoint.sh を追加したアプリ層（バージョン形式: v{release_version}）
 nginx_image_manifest_path: "manifest/nginx/image/nginx_version_manifest.yml"
+nginx_code_manifest_path: "manifest/nginx/code/nginx_code_manifest.yml"
+nginx_deploy_manifest_path: "manifest/nginx/deploy/nginx_deploy_manifest.yml"
