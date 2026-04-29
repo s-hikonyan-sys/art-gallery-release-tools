@@ -1,0 +1,6 @@
+---
+# Nginx code deploy manifest
+# code_version (key) -> source_ref, source_sha recorded at registration.
+# Register: .github/workflows/register_nginx_code.yml (PR)
+
+nginx_code: {}

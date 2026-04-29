@@ -1,0 +1,9 @@
+---
+# Nginx production deploy history (Deploy Nginx workflow appends on success).
+# deploy_type: code | image | both
+# release_version: イメージタグ（GHCR / manifest/nginx/image/nginx_version_manifest.yml のキー）
+# code_version: コードマニフェストのキー（任意。未指定時は nginx_ref 運用）
+# ref_commit_sha: コード側のコミット（nginx_code_manifest または git ls-remote）
+# image_source_sha: イメージビルド時のソースコミット（nginx_version_manifest）
+
+nginx_deployments: []
