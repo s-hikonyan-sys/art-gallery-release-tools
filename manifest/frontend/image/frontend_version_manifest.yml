@@ -7,6 +7,6 @@ frontend:
     source_ref: main
     source_sha: ca0ca9a13924b51ddf415636e94b25b112144412
     artifact_name: frontend-dist-1.0.0
-    build_run_id: "24782351373"
+    build_run_id: "25106610392"
     build_workflow: Build Frontend
     updated_at_utc: ""
