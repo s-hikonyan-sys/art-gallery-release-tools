@@ -1,6 +1,7 @@
 ---
 # Nginx: WAF 初期設定のみ（コンテナ内 docker exec）
 # 実行前に nginx コンテナが起動している必要がある（playbook_reload_nginx_safe.yml 等で保証）
+# extra-vars: deploy_nginx と同様に waf_* に加え waf_update_base_url / waf_update_path_suffix が必要
 
 - name: Nginx WAF initial setup
   hosts: "{{ target_hosts }}"

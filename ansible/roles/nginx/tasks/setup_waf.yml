@@ -7,7 +7,8 @@
 #   - nginx コンテナが running 状態であること
 #   - extra-vars: waf_serial_key, waf_support_id, waf_password,
 #                 waf_install_dir, waf_conf_container_path, waf_data_container_path,
-#                 waf_main_conf_filename, waf_update_conf_filename
+#                 waf_main_conf_filename, waf_update_conf_filename,
+#                 waf_update_base_url, waf_update_path_suffix（LATEST_URL 用・GitHub Secrets）
 #
 # 実行方法（手動）:
 #   ansible-playbook playbook_setup_waf.yml \
@@ -33,16 +34,30 @@
     - nginx
     - setup-waf
 
-# --- シグネチャ更新 URL を切り替える ---
-# ベースイメージの環境変数 WAF_UPDATE_URL_SP に切り替え先 URL が設定されている
+# --- シグネチャ更新 URL（LATEST_URL）を GitHub Secrets 由来の値で書き込む ---
+# さくら VPS 向け例: base=https://www.jp-secure.com/download/siteguardlite_sp
+#                  suffix=updates_nw/latest-nw.zip（マニュアル 7.2 Nginx 版に合わせる）
+- name: Build WAF LATEST_URL for dbupdate config
+  ansible.builtin.set_fact:
+    waf_latest_download_url: >-
+      {{ (waf_update_base_url | mandatory('waf_update_base_url: set GitHub Secret WAF_UPDATE_BASE_URL'))
+         | trim | regex_replace('/+$', '') }}/{{ (waf_update_path_suffix | mandatory('waf_update_path_suffix: set GitHub Secret WAF_UPDATE_PATH_SUFFIX'))
+         | trim | regex_replace('^/+', '') }}
+  tags:
+    - nginx
+    - setup-waf
+
 - name: Switch WAF signature update URL
   ansible.builtin.shell: |
-    docker exec {{ container_names.nginx }} \
+    docker exec \
+      -e FINAL_URL={{ waf_latest_download_url | quote }} \
+      {{ container_names.nginx }} \
       /bin/sh -c '
         CONF="{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}"
-        URL="${WAF_UPDATE_URL_SP}"
-        if [ -n "${URL}" ]; then
-          sed -i "s|^LATEST_URL=.*|LATEST_URL=${URL}|" "${CONF}"
+        if [ -f "$CONF" ]; then
+          sed -i "s|^LATEST_URL=.*|LATEST_URL=${FINAL_URL}|" "$CONF"
+        else
+          echo "LATEST_URL=${FINAL_URL}" > "$CONF"
         fi
       '
   register: waf_url_result

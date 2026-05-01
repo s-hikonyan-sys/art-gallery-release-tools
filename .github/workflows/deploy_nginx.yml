@@ -130,7 +130,9 @@ jobs:
             "waf_conf_container_path": "${{ secrets.WAF_CONF_CONTAINER_PATH }}",
             "waf_data_container_path": "${{ secrets.WAF_DATA_CONTAINER_PATH }}",
             "waf_main_conf_filename": "${{ secrets.WAF_MAIN_CONF_FILENAME }}",
-            "waf_update_conf_filename": "${{ secrets.WAF_UPDATE_CONF_FILENAME }}"
+            "waf_update_conf_filename": "${{ secrets.WAF_UPDATE_CONF_FILENAME }}",
+            "waf_update_base_url": "${{ secrets.WAF_UPDATE_BASE_URL }}",
+            "waf_update_path_suffix": "${{ secrets.WAF_UPDATE_PATH_SUFFIX }}"
           }
           VARS_EOF
           chmod 600 /tmp/ansible_vars.json
