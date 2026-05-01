@@ -4,4 +4,11 @@
 # ベースイメージ: nginx-base:{base_version}（art-gallery-nginx-base プライベートリポジトリで管理）
 # ビルドワークフロー: build_nginx.yml
 
-nginx: {}
+nginx:
+  1.0.0:
+    source_ref: base-v1.26.3-sg8.00-3
+    source_sha: c25e8eb9916015e8c2ffa156146c07a2737c1d1f
+    image: ghcr.io/s-hikonyan-sys/art-gallery-nginx:1.0.0
+    build_run_id: "25205402428"
+    build_workflow: Build Nginx Image
+    updated_at_utc: ""
