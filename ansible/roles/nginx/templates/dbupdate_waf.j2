@@ -6,7 +6,7 @@
 #                 -- get the latest pattern file from ${LATEST_URL} to ${databasedirectory}
 #                 -- write update log to log/dbupdate_waf.log
 #
-# Managed by art-gallery-release-tools（Ansible が docker cp で投入）。prefix は Jinja、起動直後に cd する。
+# Managed by art-gallery-release-tools（ホスト waf_config → entrypoint がコピー）。prefix は Jinja、起動直後に cd する。
 
 export LANG=C
 export PATH=$PATH:/usr/local/bin

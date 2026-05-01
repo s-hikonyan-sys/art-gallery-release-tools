@@ -1,96 +1,68 @@
 ---
-# 一時ディレクトリにテンプレート生成 → docker cp でコンテナへ反映 → ホスト上のステージングは削除（秘密を残さない）
-- name: Detect nginx container running (for WAF overlay push)
+# ホスト上 {{ deployment_paths.conf_dir }}/nginx/waf_config にテンプレート出力。
+# compose で /tmp/host_waf_config に :ro マウントし、art-gallery-nginx の entrypoint が起動時にコピーする。
+- name: Ensure WAF host overlay directory for compose mount
+  ansible.builtin.file:
+    path: "{{ deployment_paths.conf_dir }}/nginx/waf_config"
+    state: directory
+    mode: '0700'
+    owner: root
+    group: root
+  become: true
+  when:
+    - waf_latest_download_url is defined
+    - waf_header_ini_url is defined
+    - waf_support_id is defined
+    - waf_password is defined
+
+- name: Render WAF dbupdate.conf on host
+  ansible.builtin.template:
+    src: dbupdate.conf.j2
+    dest: "{{ deployment_paths.conf_dir }}/nginx/waf_config/{{ waf_update_conf_filename | mandatory('waf_update_conf_filename must be set (e.g. dbupdate.conf)') }}"
+    mode: '0600'
+    owner: root
+    group: root
+  become: true
+  no_log: true
+  register: waf_overlay_conf_rendered
+  when:
+    - waf_latest_download_url is defined
+    - waf_header_ini_url is defined
+    - waf_support_id is defined
+    - waf_password is defined
+
+- name: Render WAF dbupdate_waf script on host
+  ansible.builtin.template:
+    src: dbupdate_waf.j2
+    dest: "{{ deployment_paths.conf_dir }}/nginx/waf_config/dbupdate_waf"
+    mode: '0755'
+    owner: root
+    group: root
+  become: true
+  register: waf_overlay_script_rendered
+  when:
+    - waf_install_dir is defined
+    - waf_latest_download_url is defined
+    - waf_header_ini_url is defined
+    - waf_support_id is defined
+    - waf_password is defined
+
+- name: Detect nginx container running (for restart after WAF overlay)
   ansible.builtin.shell: |
     docker inspect --format='{{ "{{.State.Running}}" }}' \
       {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} 2>/dev/null || echo "false"
   register: waf_overlay_nginx_running_cmd
   changed_when: false
-
-- name: Set WAF overlay staging path and push flag
-  ansible.builtin.set_fact:
-    waf_overlay_staging_dir: "{{ deployment_paths.remote_temp_dir }}/waf_overlay"
-    waf_overlay_nginx_running: "{{ waf_overlay_nginx_running_cmd.stdout | trim == 'true' }}"
-
-- name: Render WAF overlay, copy into nginx container, remove staging
   when:
-    - waf_overlay_nginx_running | bool
-    - waf_latest_download_url is defined
-    - waf_header_ini_url is defined
-    - waf_support_id is defined
-    - waf_password is defined
-    - waf_install_dir is defined
-  block:
-    - name: Ensure remote temp directory exists (parent of WAF staging)
-      ansible.builtin.file:
-        path: "{{ deployment_paths.remote_temp_dir }}"
-        state: directory
-        mode: '0755'
-        owner: root
-        group: root
-      become: true
+    - (waf_overlay_conf_rendered is defined and waf_overlay_conf_rendered is changed)
+      or (waf_overlay_script_rendered is defined and waf_overlay_script_rendered is changed)
 
-    - name: Ensure WAF staging directory (restricted)
-      ansible.builtin.file:
-        path: "{{ waf_overlay_staging_dir }}"
-        state: directory
-        mode: '0700'
-        owner: root
-        group: root
-      become: true
-
-    - name: Render WAF dbupdate.conf to staging
-      ansible.builtin.template:
-        src: dbupdate.conf.j2
-        dest: "{{ waf_overlay_staging_dir }}/{{ waf_update_conf_filename | mandatory('waf_update_conf_filename must be set (e.g. dbupdate.conf)') }}"
-        mode: '0600'
-        owner: root
-        group: root
-      become: true
-      no_log: true
-
-    - name: Render WAF dbupdate_waf script to staging
-      ansible.builtin.template:
-        src: dbupdate_waf.j2
-        dest: "{{ waf_overlay_staging_dir }}/dbupdate_waf"
-        mode: '0755'
-        owner: root
-        group: root
-      become: true
-
-    - name: Copy dbupdate.conf into nginx container
-      ansible.builtin.shell: |
-        set -euo pipefail
-        docker cp \
-          "{{ waf_overlay_staging_dir }}/{{ waf_update_conf_filename }}" \
-          "{{ container_names.nginx }}:{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}"
-      become: true
-      no_log: true
-
-    - name: Copy dbupdate_waf into nginx container
-      ansible.builtin.shell: |
-        set -euo pipefail
-        docker cp \
-          "{{ waf_overlay_staging_dir }}/dbupdate_waf" \
-          "{{ container_names.nginx }}:{{ waf_install_dir }}/dbupdate_waf"
-      become: true
-
-  always:
-    - name: Remove WAF staging directory from host
-      ansible.builtin.file:
-        path: "{{ waf_overlay_staging_dir }}"
-        state: absent
-      become: true
-
-- name: Note skipped WAF overlay push (nginx not running)
-  ansible.builtin.debug:
-    msg: >-
-      WAF の dbupdate ファイルは nginx コンテナ未起動のためプッシュしませんでした。
-      コンテナ起動後に deploy-nginx または setup-waf を再実行してください。
+- name: Restart nginx to re-run entrypoint (refresh WAF files from host overlay)
+  ansible.builtin.shell: |
+    docker restart {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }}
+  become: true
   when:
-    - not (waf_overlay_nginx_running | bool)
-    - waf_latest_download_url is defined
-    - waf_header_ini_url is defined
-    - waf_support_id is defined
-    - waf_password is defined
-    - waf_install_dir is defined
+    - (waf_overlay_conf_rendered is defined and waf_overlay_conf_rendered is changed)
+      or (waf_overlay_script_rendered is defined and waf_overlay_script_rendered is changed)
+    - waf_overlay_nginx_running_cmd is defined
+    - waf_overlay_nginx_running_cmd.stdout | trim == 'true'

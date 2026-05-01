@@ -72,6 +72,9 @@ services:
   nginx:
     image: "{{ image_names.nginx | mandatory('image_names.nginx must be set in inventory') }}:{{ resolved_nginx_version }}"
     container_name: "{{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }}"
+    environment:
+      WAF_HOST_OVERLAY_DIR: /tmp/host_waf_config
+      WAF_DBUPDATE_CONF_NAME: "{{ waf_update_conf_filename | mandatory('waf_update_conf_filename must be set in inventory') }}"
     ports:
       - "{{ nginx_http_external_port | mandatory('nginx_http_external_port must be set in inventory') }}:80"
 {% if ssl_enabled | mandatory('ssl_enabled must be set in inventory') %}
@@ -87,7 +90,8 @@ services:
       - {{ deployment_paths.logs_dir }}/nginx:/var/log/nginx:rw
       # WAF: 設定・ライセンス情報をコンテナ再作成後も永続化
       - {{ docker_volume_waf_conf | mandatory('docker_volume_waf_conf must be set in inventory') }}:{{ waf_conf_container_path }}:rw
-      # WAF: dbupdate.conf / dbupdate_waf は Ansible が一時生成し docker cp で投入（ファイルバインドは使わない）
+      # WAF: Ansible がホストに出力した dbupdate 系を :ro で渡し、entrypoint が起動時に実体パスへコピー
+      - {{ deployment_paths.conf_dir }}/nginx/waf_config:/tmp/host_waf_config:ro
       # WAF: シグネチャファイルを永続化（更新のたびにダウンロード不要）
       - {{ docker_volume_waf_sig | mandatory('docker_volume_waf_sig must be set in inventory') }}:{{ waf_data_container_path }}:rw
 {% if ssl_enabled %}

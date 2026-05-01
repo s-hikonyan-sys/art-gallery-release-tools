@@ -1,5 +1,5 @@
 ---
-# WAF 初期設定（テンプレートを一時ディレクトリに生成 → docker cp → ステージング削除）
+# WAF 初期設定（ホスト waf_config にテンプレ出力 → entrypoint が起動時コピー。テンプレ変更時は waf_render が nginx を再起動）
 # タグ: setup-waf
 #
 # extra-vars: waf_serial_key, waf_support_id, waf_password,
@@ -46,7 +46,7 @@
     - nginx
     - setup-waf
 
-- name: Render WAF overlay and push into container
+- name: Render WAF overlay on host (compose mount + entrypoint)
   ansible.builtin.include_tasks: waf_render_overlay_files.yml
   tags:
     - nginx
@@ -107,7 +107,7 @@
   ansible.builtin.debug:
     msg: >-
       WAF 初期設定が完了しました。
-      dbupdate.conf / dbupdate_waf は一時生成後に docker cp でコンテナへ投入済みです。
+      dbupdate.conf / dbupdate_waf はホストの nginx/waf_config に出力済みです（entrypoint がコンテナ起動時に反映）。
   tags:
     - nginx
     - setup-waf
