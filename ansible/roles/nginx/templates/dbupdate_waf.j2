@@ -43,8 +43,12 @@ forceupdate="no"
 tty=false
 
 ### Read Configuration file###
-for var in use_proxy http_proxy_host http_proxy_port use_proxyauth http_proxyauth_user http_proxyauth_pass sig_download_user sig_download_pass LATEST_URL HEADER_INI_URL service_restart ; do
+# プロキシ認証・DL 認証は URL 断片に入るため従来どおり % エンコード。LATEST_URL / HEADER_INI_URL は wget にそのまま渡すためエンコードしない。
+for var in use_proxy http_proxy_host http_proxy_port use_proxyauth http_proxyauth_user http_proxyauth_pass sig_download_user sig_download_pass ; do
     eval ${var}="\`perl -ne 'if(/^${var}=(.*)/){\$v=\$1; \$v =~ s/([^\w\.\-])/chr(0x25) . sprintf(\"%02x\", ord(\$1))/eg; print \$v;}' conf/dbupdate.conf\`"  # '
+done
+for var in LATEST_URL HEADER_INI_URL service_restart ; do
+    eval ${var}="\`perl -ne 'if(/^${var}=(.*)/){print \$1;}' conf/dbupdate.conf\`"
 done
 
 for var in notify_fault ; do
