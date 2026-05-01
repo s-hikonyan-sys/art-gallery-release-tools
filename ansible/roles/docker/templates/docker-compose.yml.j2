@@ -82,6 +82,7 @@ services:
         condition: service_started
     volumes:
       - {{ deployment_paths.conf_dir }}/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - {{ deployment_paths.conf_dir }}/nginx/conf.d:/etc/nginx/conf.d:ro
       - {{ deployment_paths.dist_dir }}/frontend:/usr/share/nginx/html:ro
       - {{ deployment_paths.logs_dir }}/nginx:/var/log/nginx:rw
       # WAF: 設定・ライセンス情報をコンテナ再作成後も永続化

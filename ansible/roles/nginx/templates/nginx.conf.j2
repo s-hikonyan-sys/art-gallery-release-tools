@@ -1,0 +1,96 @@
+# Nginx（コンテナ内 listen は 80 / 443 固定。ホスト側ポートは docker-compose の ports でマッピング）
+# 2GB VPS 向け: worker / 接続数は控えめ、ログはバッファ、upstream keepalive で接続再利用
+
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    server_tokens off;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+
+    # Docker 組み込み DNS（バックエンド名の動的解決用）
+    resolver 127.0.0.11 valid=10s ipv6=off;
+
+    # SiteGuard / WAF
+    SiteGuard_RootPath {{ waf_install_dir | default('/opt/jp-secure/siteguardlite') }};
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    # ディスク I/O 削減（小規模 VPS 向け）
+    access_log /var/log/nginx/access.log main buffer=32k flush=5s;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;
+
+    upstream backend_server {
+        server {{ backend_host | mandatory('backend_host must be set in inventory') }}:{{ backend_port | mandatory('backend_port must be set in inventory') }};
+    }
+
+    # --- HTTP（コンテナ内 80）---
+    server {
+        listen 80;
+        server_name {{ domain_name | mandatory('domain_name must be set in inventory') }};
+
+        location /health {
+            access_log off;
+            default_type text/plain;
+            return 200 'OK';
+        }
+
+{% if ssl_enabled | mandatory('ssl_enabled must be set in inventory') %}
+        location / {
+            return 301 https://$host$request_uri;
+        }
+{% else %}
+        include {{ waf_install_dir | default('/opt/jp-secure/siteguardlite') }}/nginx/siteguard.conf;
+        include /etc/nginx/conf.d/common_locations.inc;
+{% endif %}
+    }
+
+{% if ssl_enabled | mandatory('ssl_enabled must be set in inventory') %}
+    # --- HTTPS（コンテナ内 443）---
+    server {
+        listen 443 ssl;
+        http2 on;
+        server_name {{ domain_name | mandatory('domain_name must be set in inventory') }};
+
+        ssl_certificate {{ ssl_certificate | mandatory('ssl_certificate must be set in inventory') }};
+        ssl_certificate_key {{ ssl_certificate_key | mandatory('ssl_certificate_key must be set in inventory') }};
+
+        ssl_session_timeout 1d;
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_tickets off;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_prefer_server_ciphers off;
+        ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
+
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+        include {{ waf_install_dir | default('/opt/jp-secure/siteguardlite') }}/nginx/siteguard.conf;
+        include /etc/nginx/conf.d/common_locations.inc;
+    }
+{% endif %}
+}

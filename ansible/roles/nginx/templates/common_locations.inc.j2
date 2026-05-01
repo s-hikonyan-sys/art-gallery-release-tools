@@ -1,0 +1,49 @@
+# 共通 location（HTTP / HTTPS の両方から include）
+
+root /usr/share/nginx/html;
+index index.html;
+client_max_body_size {{ client_max_body_size | mandatory('client_max_body_size must be set in inventory') }};
+
+# ドットファイル（.well-known 以外）
+location ~ /\.(?!well-known).* {
+    deny all;
+    return 404;
+}
+
+# バックエンド・設定系パス
+location ~ ^/(my_properties|config|internal|\.env|\.git|app\.py|domain|repositories|services|routes|Dockerfile|docker-compose|requirements|migrations|tests) {
+    deny all;
+    return 404;
+}
+
+# ソース・設定っぽい拡張子
+location ~ \.(yaml|yml|env|ini|conf|sql|md|txt|log|py|sh|bak|swp)$ {
+    deny all;
+    return 404;
+}
+
+location /api {
+    proxy_pass http://backend_server;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_cache_bypass $http_upgrade;
+
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+}
+
+location / {
+    try_files $uri $uri/ /index.html;
+}
+
+location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+    access_log off;
+}

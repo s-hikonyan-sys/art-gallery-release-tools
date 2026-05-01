@@ -1,5 +1,5 @@
 ---
-# Nginx: 設定リポジトリの取得と nginx.conf 配置のみ（コンテナ操作なし）
+# Nginx: 設定リポジトリの取得（任意）とテンプレートからの nginx.conf / conf.d 配置のみ（コンテナ操作なし）
 
 - name: Deploy Nginx configuration files
   hosts: "{{ target_hosts }}"
