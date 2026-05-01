@@ -12,7 +12,6 @@
     group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
   loop:
     - "{{ deployment_paths.conf_dir }}/nginx"
-    - "{{ deployment_paths.conf_dir }}/nginx/waf"
     - "{{ deployment_paths.conf_dir }}/nginx/conf.d"
     - "{{ deployment_paths.src_dir }}/{{ service_repo_names.nginx }}"
     - "{{ deployment_paths.logs_dir }}/nginx"
@@ -80,7 +79,7 @@
     - deploy-nginx
     - deploy-all
 
-- name: Render WAF bind-mount overlay files (dbupdate.conf, dbupdate_waf)
+- name: Render WAF overlay and push into container (when nginx is running)
   ansible.builtin.include_tasks: waf_render_overlay_files.yml
   when:
     - waf_support_id is defined
