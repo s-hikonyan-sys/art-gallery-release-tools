@@ -1,0 +1,353 @@
+#!/bin/sh
+#
+# dbupdate_waf    -- script for updating databases.
+#                 -- for SiteGuard Server Edition
+#                 -- use wget command to retrieve latest-lite.zip
+#                 -- get the latest pattern file from ${LATEST_URL} to ${databasedirectory}
+#                 -- write update log to log/dbupdate_waf.log
+#
+# Managed by art-gallery-release-tools (bind-mounted). prefix は Jinja、起動直後に cd する。
+
+export LANG=C
+export PATH=$PATH:/usr/local/bin
+PRODUCT=siteguardlite
+prefix={{ waf_install_dir | mandatory('waf_install_dir must be set') }}
+cd "$prefix" || { echo "Cannot change to directory [$prefix]"; exit 1; }
+
+OS=`uname -s`
+WGET_CMD=wget
+
+LICENSE=`grep "^..*$" ${prefix}/conf/license.txt`
+WGET_OPTION_INI="--timeout=60 --tries=1 --cache=off --ca-certificate=${prefix}/misc/ca-cert.crt"
+WGET_OPTION="--timeout=60 --tries=1 --cache=off --ca-certificate=${prefix}/misc/ca-cert.crt"
+
+UNZIP_CMD=unzip
+UNZIP_OPTION=-qo
+
+updatedirectory=./update_waf
+databasedirectory=./databases_waf
+tmpdirectory=./tmp
+
+latestfile=${updatedirectory}/latest-lite.zip
+dlinifile=${tmpdirectory}/header.ini
+
+logdir=./logs
+logfile=$logdir/dbupdate_waf.log
+errlogfile=$logdir/dbupdate_waf_err.log
+resultfile=$logdir/dbupdate_waf_last_result.txt
+notifydir=./notify
+notifyfaultdir=$notifydir/fault
+mergeonly="no"
+forceupdate="no"
+
+tty=false
+
+### Read Configuration file###
+for var in use_proxy http_proxy_host http_proxy_port use_proxyauth http_proxyauth_user http_proxyauth_pass sig_download_user sig_download_pass LATEST_URL HEADER_INI_URL service_restart ; do
+    eval ${var}="\`perl -ne 'if(/^${var}=(.*)/){\$v=\$1; \$v =~ s/([^\w\.\-])/chr(0x25) . sprintf(\"%02x\", ord(\$1))/eg; print \$v;}' conf/dbupdate.conf\`"  # '
+done
+
+for var in notify_fault ; do
+    eval ${var}="\`perl -ne 'if(/^${var}=(.*)/){\$v=\$1; \$v =~ s/([^\w\.\-])/chr(0x25) . sprintf(\"%02x\", ord(\$1))/eg; print \$v;}' conf/siteguardlite.ini\`"  # '
+done
+
+
+if [ -r conf/dbupdate_waf.conf ] ; then
+        . conf/dbupdate_waf.conf
+fi
+
+### dbupdate_waf_url.conf は廃止（dbupdate.conf に LATEST_URL / HEADER_INI_URL を統合）
+
+### ADD DONWLOAD ONLY
+if [ -z ${downloadonly} ]; then
+        downloadonly="no"
+fi
+### ADD MERGE ONLY
+if [ -z ${mergeonly} ]; then
+        mergeonly="no"
+fi
+### ADD FORCEUPDATE
+if [ -z ${forceupdate} ]; then
+        forceupdate="no"
+fi
+
+if [ "${use_proxy}" = "yes" ] ; then
+        if [ "${use_proxyauth}" = "yes" ];then
+                export https_proxy="http://${http_proxyauth_user}:${http_proxyauth_pass}@${http_proxy_host}:${http_proxy_port}/"
+        else
+                export https_proxy="http://${http_proxy_host}:${http_proxy_port}/"
+        fi
+fi
+USER_AUTH="--http-user=${sig_download_user} --http-password=${sig_download_pass}"
+
+### Exec Local Update Command ###
+if [ -r dbupdate-latest.local -a "X`basename $0`" != "Xdbupdate-latest.local" ] ; then
+        exec dbupdate-latest.local
+fi
+
+# Print messages to log
+printlog(){
+    if [ -n "$logfile" ]; then
+        echo `date +"%b %d %H:%M:%S"` "$*" >>$logfile
+    fi
+}
+printErrlog(){
+    if [ -n "$errlogfile" ]; then
+        if [ ${OS} = 'SunOS' ]; then
+            echo `perl -e 'print time'`".000000"" ""$*" >>$errlogfile
+        else
+                echo `date +"%s.000000"`" ""$*" >>$errlogfile
+            fi
+    fi
+}
+printNotifyErrlog(){
+    checkstr=`date +"%6N"`
+    if [ ${checkstr} = '%6N' ]; then
+        NOWTIME=`perl -MTime::HiRes=gettimeofday -e 'my ($epochSec, $microSec) = gettimeofday();my ($sec, $min, $hour, $mday, $mon, $year) = localtime(time);$year += 1900;$mon++;printf("%04d%02d%02d%02d%02d%02d%06d", $year, $mon, $mday, $hour, $min, $sec, $microSec);'`
+        notifyErrfile=$(printf "F_%sE%s%s.log" ${NOWTIME} "00000" $1)
+    else
+        notifyErrfile=$(printf "F_%sE%s%s.log" `date +"%Y%m%d%H%M%S%6N"` "00000" $1)
+    fi
+    echo `date +"[%Y-%m-%d %H:%M:%S]"`" ###ERROR### [$1]:""$2" >>$notifyfaultdir/$notifyErrfile
+}
+
+# Only print messages to stdout if it is a terminal
+message(){
+   if $tty; then
+        echo "$*"
+   fi
+}
+
+logmessage(){
+    if $tty; then
+        echo "$*"
+    fi
+    printlog "$*"
+}
+
+error(){
+    if $tty; then
+        echo `basename $0`: "$2" >&2
+    fi
+    printlog error: "$2"
+    printErrlog error: "$2"
+    if [ "X${notify_fault}" = "Xyes" ]; then
+        printNotifyErrlog "$1" "$2"
+    fi
+}
+
+programinfo()
+{
+    message "SiteGuard Lite"
+    message "Database Update"
+    message
+}
+
+usage(){
+    message "Usage:"
+    message
+    message "$0 [-f <configfile> |--configfile <configfile>] [<latest-lite.zip>] [--downloadonly] [--mergeonly] [--forceupdate] [--restart yes|no]"
+    message
+    exit 1
+}
+
+parsecommandline() {
+    conffile=""
+    doupdate=true
+    while [ "$#" != 0 ]; do
+        case $1 in
+            -v)
+                tty=true
+            ;;
+            -f)
+                shift
+                conffile=$1
+            ;;
+            --configfile)
+                shift
+                conffile=$1
+            ;;
+            --downloadonly)
+                downloadonly="yes"
+            ;;
+            --mergeonly)
+                mergeonly="yes"
+            ;;
+            --forceupdate)
+                forceupdate="yes"
+            ;;
+            --restart)
+                shift
+                service_restart=$1
+            ;;
+            --help)
+                usage
+            ;;
+            -*)
+                error "001000" "Invalid option $1"
+                usage
+            ;;
+            *)
+                if $doupdate; then
+                        latestfile=$1
+                    doupdate=false
+                else
+                    # We already got update directory
+                    error "001001" "Too many arguments"
+                    usage
+                fi
+            ;;
+        esac
+        shift
+    done
+}
+
+programinfo
+
+parsecommandline $*
+
+SGL_VERSION=`make show_webui_version`
+VERSION=`(grep -E '^Version=' ${prefix}/conf/waf/header.ini | sed -e 's/.*=//')`
+
+# Set update directory given from command-line.
+mkdir $updatedirectory >/dev/null 2>&1
+if [ ! -w $updatedirectory ]; then
+        error "001002" "Update directory $updatedirectory not writable. Cannot fetch database updates."
+        exit 1
+fi
+
+mkdir $databasedirectory >/dev/null 2>&1
+if [ ! -w $databasedirectory ]; then
+    error "001003" "Database directory not writable. Cannot update databases."
+    exit 1
+fi
+
+if [ "$updatedirectory" = "$databasedirectory" ]; then
+    error "001004" "Can't do update from database directory: $updatedirectory"
+    exit 1
+fi
+
+if [ "X${mergeonly}" = "Xno" ]; then
+        which $WGET_CMD >/dev/null 2>&1
+        result=$?
+        if [ $result -eq 1 ]; then
+                error "001005" "wget command not found."
+                exit 1
+        fi
+
+        if $doupdate; then
+
+                logmessage "Fetching update version from web site"
+                ${WGET_CMD} ${WGET_OPTION_INI} --header="License-No: ${LICENSE}" --header="Version-No:${VERSION}" --header="SGL-Version:${SGL_VERSION}" ${USER_AUTH} ${HEADER_INI_URL} -O ${dlinifile} >$resultfile 2>&1
+                result=$?
+                if grep -E "[Ff]ailed:? " $resultfile >/dev/null 2>&1 ; then
+                    result_str=`perl -ne 'print "$1\n" if/[Ff]ailed:? (.*)$/' $resultfile | head -n1`
+                else
+                    result_str=`cat $resultfile | tail -1`
+                fi
+                if [ $result != 0 ]; then
+                        error "001011" "Get Version failed. Error code: $result msg: $result_str"
+                       echo $result_str
+                        exit 1
+                fi
+                touch "${dlinifile}.tmp"
+                if [ "X${forceupdate}" = "Xno" ]; then
+                        if cmp -s $dlinifile conf/waf/header.ini; then
+                                logmessage "It is the latest version."
+                                exit 0
+                        fi
+                fi
+
+            logmessage "Fetching update from web site to $updatedirectory"
+                ${WGET_CMD} ${WGET_OPTION} --header="License-No: ${LICENSE}" --header="Version-No:${VERSION}" --header="SGL-Version:${SGL_VERSION}" ${USER_AUTH} ${LATEST_URL} -O ${latestfile} >>$resultfile 2>&1
+            result=$?
+            if grep -E "[Ff]ailed:? " $resultfile >/dev/null 2>&1 ; then
+                result_str=`perl -ne 'print "$1\n" if/[Ff]ailed:? (.*)$/' $resultfile | head -n1`
+            else
+                result_str=`cat $resultfile | tail -1`
+            fi
+
+            if [ $result != 0 ]; then
+                        error "001006" "Database update failed. Error code: $result msg: $result_str"
+                        echo $result_str
+                        exit 1
+            fi
+            logmessage "Updated database files in $updatedirectory from web site."
+        fi
+
+        logmessage "Extracting ${latestfile}"
+        ${UNZIP_CMD} -qt ${latestfile} >/dev/null 2>&1
+        result=$?
+        if [ $result != 0 ]; then
+            error "001007" "Database validation failed. "
+            exit 1
+        fi
+        ls ${updatedirectory}/ | grep -v '^latest.*\.zip'| xargs -I %s rm -f ${updatedirectory}/%s
+        if ${UNZIP_CMD} -qo ${latestfile} -d "${updatedirectory}" >>$logfile 2>&1 ; then
+            logmessage "Databases in $updatedirectory are valid."
+        else
+            error "001007" "Database validation failed. "
+            exit 1
+        fi
+
+        # ADD MODIFY WHEN WGET ONLY is yes, finish
+        if [ -n ${downloadonly} ]; then
+                if [ "X${downloadonly}" = "Xyes" ]; then
+                        logmessage "Database Update file was acquired.(download only)"
+                        exit 0
+                fi
+        fi
+fi
+# ADD MODIFY WHEN MERGE ONLY is yes , header.ini file exists check
+if [ "X${mergeonly}" = "Xyes" ]; then
+        if [ ! -e $updatedirectory/header.ini ]; then
+                error "001008" "Database Update file is not exists. [$updatedirectory/header.ini]"
+                exit 1
+        fi
+fi
+if [ "X${forceupdate}" = "Xno" ]; then
+        if cmp -s $updatedirectory/header.ini conf/waf/header.ini; then
+                logmessage "Database file not changed."
+                exit 0
+        fi
+fi
+
+rm -f ${databasedirectory}/* >/dev/null 2>&1
+for f in $updatedirectory/*; do \
+        if [ -f "$f" ] && [ "$f" != "$updatedirectory/latest-lite.zip" ]; then
+                if ! cp "$f" "$databasedirectory/" ; then
+                        error "001009" "Database update failed. [cp $f $databasedirectory]"
+                        exit 1
+                fi
+        fi
+done
+
+cp $databasedirectory/sig_official_base.txt conf/waf/
+cp $databasedirectory/sig_official_date.txt conf/waf/
+cp $databasedirectory/sig_official_comment.*.txt conf/waf/
+if [ -f $databasedirectory/sig_official_exp1.txt ]; then
+        cp $databasedirectory/expheader.ini conf/waf/
+        cp $databasedirectory/sig_official_exp?.txt conf/waf/
+fi
+# ADD MODIFY header.ini copy
+cp $databasedirectory/header.ini conf/waf/
+if [ "X$add_monitor" != "Xyes" ]; then
+        add_monitor="no"
+fi
+
+if ! ( ./waf_sig_merge.pl --use-dbsettings=${use_dbsettings} --add-monitor=${add_monitor} conf/waf/sig_official.txt conf/waf/sig_official_base.txt > conf/waf/sig_official_new.txt && cp conf/waf/sig_official_new.txt conf/waf/sig_official.txt ) ; then
+        error "001010" "sig_merge failed."
+        exit 1
+fi
+
+
+if [ "X${service_restart}" = "Xyes" ] && grep -E '^http_service=yes' conf/${PRODUCT}.ini >/dev/null; then
+                make reconfig >> $logfile 2>&1
+fi
+
+logmessage "Databases updated successfully."
+#MODIFY $databasedirectory/header.ini -> conf/waf/header.ini
+#logmessage `grep Version= $databasedirectory/header.ini 2>&1`
+logmessage `grep Version= conf/waf/header.ini 2>&1`
+
+exit 0

@@ -1,0 +1,17 @@
+---
+# GitHub Secrets の WAF_UPDATE_BASE_URL / WAF_UPDATE_PATH_SUFFIX から URL を組み立てる
+- name: Build WAF LATEST_URL and HEADER_INI_URL
+  ansible.builtin.set_fact:
+    waf_latest_download_url: >-
+      {{ (waf_update_base_url | trim | regex_replace('/+$', ''))
+      }}/{{ (waf_update_path_suffix | trim | regex_replace('^/+', '')) }}
+  when:
+    - waf_update_base_url is defined
+    - waf_update_path_suffix is defined
+    - (waf_update_base_url | default('') | trim | length) > 0
+    - (waf_update_path_suffix | default('') | trim | length) > 0
+
+- name: Derive HEADER_INI_URL from signature ZIP URL
+  ansible.builtin.set_fact:
+    waf_header_ini_url: "{{ waf_latest_download_url | regex_replace('/[^/]+\\.zip$', '/header.ini') }}"
+  when: waf_latest_download_url is defined

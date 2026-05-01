@@ -12,6 +12,7 @@
     group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
   loop:
     - "{{ deployment_paths.conf_dir }}/nginx"
+    - "{{ deployment_paths.conf_dir }}/nginx/waf"
     - "{{ deployment_paths.conf_dir }}/nginx/conf.d"
     - "{{ deployment_paths.src_dir }}/{{ service_repo_names.nginx }}"
     - "{{ deployment_paths.logs_dir }}/nginx"
@@ -64,6 +65,26 @@
     owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
     group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
   become: yes
+  tags:
+    - nginx
+    - deploy-nginx
+    - deploy-all
+
+- name: Build WAF download URL facts for overlay templates
+  ansible.builtin.include_tasks: waf_build_url_facts.yml
+  when:
+    - waf_update_base_url is defined
+    - waf_update_path_suffix is defined
+  tags:
+    - nginx
+    - deploy-nginx
+    - deploy-all
+
+- name: Render WAF bind-mount overlay files (dbupdate.conf, dbupdate_waf)
+  ansible.builtin.include_tasks: waf_render_overlay_files.yml
+  when:
+    - waf_support_id is defined
+    - waf_password is defined
   tags:
     - nginx
     - deploy-nginx

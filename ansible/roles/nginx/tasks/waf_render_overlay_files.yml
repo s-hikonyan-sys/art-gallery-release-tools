@@ -1,0 +1,25 @@
+---
+# ホスト上のオーバーレイ（docker-compose で nginx コンテナに :ro バインド）
+- name: Render WAF dbupdate.conf on host for bind mount
+  ansible.builtin.template:
+    src: dbupdate.conf.j2
+    dest: "{{ deployment_paths.conf_dir }}/nginx/waf/{{ waf_update_conf_filename | mandatory('waf_update_conf_filename must be set (e.g. dbupdate.conf)') }}"
+    mode: '0600'
+    owner: root
+    group: root
+  become: yes
+  when:
+    - waf_latest_download_url is defined
+    - waf_header_ini_url is defined
+    - waf_support_id is defined
+    - waf_password is defined
+
+- name: Render WAF dbupdate_waf script on host for bind mount
+  ansible.builtin.template:
+    src: dbupdate_waf.j2
+    dest: "{{ deployment_paths.conf_dir }}/nginx/waf/dbupdate_waf"
+    mode: '0755'
+    owner: root
+    group: root
+  become: yes
+  when: waf_install_dir is defined

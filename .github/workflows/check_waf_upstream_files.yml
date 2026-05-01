@@ -1,0 +1,113 @@
+# nginx-base イメージに同梱されている素の dbupdate.conf / dbupdate_waf が変わったかを md5 で検知し、
+# 差分があれば Issue を作成する（release-tools の dbupdate*.j2 を手動で追随するため）。
+#
+# GHCR: nginx-base は Private のため docker pull には PAT が必要（build_nginx.yml と同じ）。
+name: Check WAF upstream files (nginx-base)
+
+on:
+  workflow_dispatch:
+    inputs:
+      nginx_base_tag:
+        description: '確認する nginx-base イメージタグ（例: 1.0.0）'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}
+
+      - name: Pull nginx-base and compute hashes
+        id: upstream
+        run: |
+          set -euo pipefail
+          IMG="ghcr.io/s-hikonyan-sys/nginx-base:${{ github.event.inputs.nginx_base_tag }}"
+          docker pull "$IMG"
+          docker run --rm --entrypoint cat "$IMG" \
+            /opt/jp-secure/siteguardlite/conf/dbupdate.conf > /tmp/dbupdate.conf.upstream
+          docker run --rm --entrypoint cat "$IMG" \
+            /opt/jp-secure/siteguardlite/dbupdate_waf > /tmp/dbupdate_waf.upstream
+          echo "conf_hash=$(md5sum /tmp/dbupdate.conf.upstream | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "waf_hash=$(md5sum /tmp/dbupdate_waf.upstream | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Read baseline hashes from repo
+        id: baseline
+        run: |
+          set -euo pipefail
+          HASH_FILE="ansible/roles/nginx/files/waf_original_hashes.txt"
+          get() { grep "^$1=" "$HASH_FILE" | cut -d= -f2- || true; }
+          echo "conf_hash=$(get DBUPDATE_CONF_HASH)" >> "$GITHUB_OUTPUT"
+          echo "waf_hash=$(get DBUPDATE_WAF_HASH)" >> "$GITHUB_OUTPUT"
+
+      - name: Job summary (upstream md5 and baseline hint)
+        run: |
+          set -euo pipefail
+          {
+            echo "## WAF upstream md5 (nginx-base:${{ github.event.inputs.nginx_base_tag }})"
+            echo ""
+            echo "| File | Upstream md5 |"
+            echo "|------|--------------|"
+            echo "| dbupdate.conf | \`${{ steps.upstream.outputs.conf_hash }}\` |"
+            echo "| dbupdate_waf | \`${{ steps.upstream.outputs.waf_hash }}\` |"
+            echo ""
+            echo "### ベースライン (\`ansible/roles/nginx/files/waf_original_hashes.txt\`)"
+            echo ""
+            echo "| Key | Repo |"
+            echo "|-----|------|"
+            echo "| DBUPDATE_CONF_HASH | \`${{ steps.baseline.outputs.conf_hash }}\` |"
+            echo "| DBUPDATE_WAF_HASH | \`${{ steps.baseline.outputs.waf_hash }}\` |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          BC="${{ steps.baseline.outputs.conf_hash }}"
+          BW="${{ steps.baseline.outputs.waf_hash }}"
+          if [ -z "$BC" ] && [ -z "$BW" ]; then
+            {
+              echo "**初回:** ベースラインが未設定のため Issue は作成しません。上記 Upstream md5 を \`waf_original_hashes.txt\` に記入してコミットしてください。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # ベースラインが空のときは常に「不一致」になるため Issue を作らない。
+      # いずれかのキーが設定されていて、その md5 だけ上流と違う場合に通知する。
+      - name: Open issue if upstream changed
+        if: >-
+          (steps.baseline.outputs.conf_hash != '' && steps.baseline.outputs.conf_hash != steps.upstream.outputs.conf_hash) ||
+          (steps.baseline.outputs.waf_hash != '' && steps.baseline.outputs.waf_hash != steps.upstream.outputs.waf_hash)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TITLE="[WAF] nginx-base:${{ github.event.inputs.nginx_base_tag }} の dbupdate / dbupdate_waf がベースラインと不一致"
+          BODY="$(cat <<EOF
+          nginx-base イメージ内ファイルの md5 が \`ansible/roles/nginx/files/waf_original_hashes.txt\` と一致しません。
+          WAF バージョンアップ等でベンダー差分が入った可能性があります。
+
+          | ファイル | ベースライン | イメージ |
+          |----------|--------------|----------|
+          | dbupdate.conf | \`${{ steps.baseline.outputs.conf_hash }}\` | \`${{ steps.upstream.outputs.conf_hash }}\` |
+          | dbupdate_waf | \`${{ steps.baseline.outputs.waf_hash }}\` | \`${{ steps.upstream.outputs.waf_hash }}\` |
+
+          **対応:** \`ansible/roles/nginx/templates/dbupdate.conf.j2\` / \`dbupdate_waf.j2\` を新しい内容に合わせて更新し、検証後に \`waf_original_hashes.txt\` を新しい md5 で更新してコミットしてください。
+
+          <details><summary>dbupdate.conf 先頭 40 行（upstream）</summary>
+
+          \`\`\`
+          $(head -n 40 /tmp/dbupdate.conf.upstream)
+          \`\`\`
+
+          </details>
+          EOF
+          )"
+          gh issue create --repo "${{ github.repository }}" --title "$TITLE" --body "$BODY"

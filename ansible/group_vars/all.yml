@@ -63,10 +63,15 @@ docker_volume_postgres_data: "{{ app_name }}_postgres_data"
 docker_volume_waf_conf: "{{ app_name }}_waf_conf"
 docker_volume_waf_sig: "{{ app_name }}_waf_sig"
 
-# WAF コンテナパス等は GitHub Actions の Secrets から --extra-vars（ansible_vars.json）で渡す。
-# 必要な変数: waf_install_dir, waf_conf_container_path, waf_data_container_path,
-#             waf_main_conf_filename, waf_update_conf_filename,
-#             waf_update_base_url, waf_update_path_suffix（LATEST_URL 用）
+# WAF: compose / テンプレート用デフォルト（本番は Secrets の extra-vars で上書き可）
+waf_install_dir: "/opt/jp-secure/siteguardlite"
+waf_conf_container_path: "/opt/jp-secure/siteguardlite/conf"
+waf_data_container_path: "/opt/jp-secure/siteguardlite/databases_waf"
+waf_main_conf_filename: "waf.ini"
+waf_update_conf_filename: "dbupdate.conf"
+# 以下は GitHub Actions の Secrets から --extra-vars で渡す想定
+# waf_serial_key, waf_support_id, waf_password,
+# waf_update_base_url, waf_update_path_suffix（LATEST_URL 用）
 # WAF 反映・シグネチャ更新コマンドはコード側（setup_waf / update_waf_signatures）で定義する。
 # nginx ベースイメージ名（2層イメージ戦略のベース層）
 # バージョン形式はプライベートリポジトリ側で管理
