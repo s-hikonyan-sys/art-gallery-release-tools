@@ -1,0 +1,20 @@
+---
+# コンテナ未起動時は docker compose up で起動し、その後 nginx -t / reload
+
+- name: Get nginx container status
+  ansible.builtin.shell: |
+    docker inspect --format='{{ "{{.State.Status}}" }}' {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} 2>/dev/null || echo "not_found"
+  register: nginx_container_status
+  changed_when: false
+
+- name: Start nginx container when missing or not running
+  ansible.builtin.include_role:
+    name: docker
+    tasks_from: container/start/start_nginx
+  when: nginx_container_status.stdout == "not_found" or nginx_container_status.stdout != "running"
+
+- name: Reload nginx (nginx -t check + nginx -s reload)
+  ansible.builtin.include_tasks: reload.yml
+  tags:
+    - reload-nginx
+    - deploy-frontend

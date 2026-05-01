@@ -54,10 +54,9 @@ jobs:
       - name: Run WAF signature update
         run: |
           cd ansible
-          ansible-playbook playbook_deploy_nginx.yml \
+          ansible-playbook playbook_update_waf_signatures.yml \
             --inventory inventory/production.yml \
-            --extra-vars "@/tmp/ansible_vars.json" \
-            --tags "update-waf-signatures"
+            --extra-vars "@/tmp/ansible_vars.json"
 
       - name: Remove sensitive files
         if: always()

@@ -9,8 +9,8 @@
 #                 waf_install_dir, waf_conf_container_path, waf_data_container_path,
 #                 waf_main_conf_filename, waf_update_conf_filename
 #
-# 実行方法（deploy_nginx.yml から setup-waf タグを付けて実行）:
-#   ansible-playbook playbook_deploy_nginx.yml --tags setup-waf \
+# 実行方法（手動）:
+#   ansible-playbook playbook_setup_waf.yml \
 #     --extra-vars "waf_serial_key=XXX waf_support_id=XXX waf_password=XXX"
 
 - name: Check nginx container is running

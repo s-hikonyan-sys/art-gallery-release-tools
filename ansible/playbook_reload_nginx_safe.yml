@@ -1,0 +1,13 @@
+---
+# Nginx: コンテナ未起動時は起動してから reload
+# Frontend デプロイ後のリロードや、WAF 実行前の起動保証に使用
+
+- name: Ensure Nginx is running then reload configuration
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Safe reload with optional start
+      ansible.builtin.include_role:
+        name: nginx
+        tasks_from: safe_reload_with_start

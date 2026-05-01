@@ -84,7 +84,9 @@ art-gallery-release-tools/
     │   └── ci.yml                # CI 環境ホスト定義
     ├── playbook_build_*.yml           # ビルド用プレイブック（build_*）
     ├── playbook_deploy_*.yml          # デプロイ用プレイブック（deploy_*）
-    ├── playbook_reload_nginx.yml      # Nginx ホットリロード専用
+    ├── playbook_reload_nginx.yml      # Nginx ホットリロード専用（コンテナ running 前提）
+    ├── playbook_reload_nginx_safe.yml # 未起動なら compose up 後に reload（Frontend / CI 向け）
+    ├── playbook_update_waf_signatures.yml  # WAF シグネチャ更新のみ
     ├── playbook_setup_startup_service.yml  # systemd 自動起動サービス設定
     ├── roles/
     │   ├── backend/

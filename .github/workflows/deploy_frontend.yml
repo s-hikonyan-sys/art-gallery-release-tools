@@ -85,13 +85,18 @@ jobs:
           VARS_EOF
           chmod 600 /tmp/ansible_vars.json
 
-      - name: Deploy Frontend
+      - name: Deploy Frontend (workflow-driven)
         run: |
+          set -euo pipefail
           cd ansible
-          ansible-playbook playbook_deploy_frontend.yml \
-            --inventory inventory/production.yml \
-            --extra-vars "@/tmp/ansible_vars.json" \
-            --tags "deploy-frontend,reload-nginx"
+          INV=(--inventory inventory/production.yml --extra-vars "@/tmp/ansible_vars.json")
+
+          echo "::notice::静的ファイルの配置のみの手順では nginx コンテナの起動は不要です。"
+          echo "::notice::続くリロードおよび将来ここに追加する疎通テストでは nginx コンテナの起動が必要です（未起動時は compose up を試行します）。初回は Deploy Nginx を先に実行してください。"
+
+          ansible-playbook playbook_deploy_nginx_compose.yml "${INV[@]}"
+          ansible-playbook playbook_deploy_frontend_code.yml "${INV[@]}"
+          ansible-playbook playbook_reload_nginx_safe.yml "${INV[@]}"
 
       - name: Remove sensitive files
         if: always()

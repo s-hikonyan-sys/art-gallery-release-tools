@@ -1,9 +1,8 @@
 ---
-# Nginx ホットリロード専用プレイブック
-# nginx.conf の変更を伴わない場合に nginx -s reload のみを実行する
+# Nginx ホットリロード専用プレイブック（コンテナが running のときのみ reload）
+# 未起動時に起動まで行う場合は playbook_reload_nginx_safe.yml を使用
 # 主な用途:
-#   - frontend デプロイ後の手動確認・再試行
-#   - deploy_frontend.yml が失敗した際のリカバリ
+#   - コンテナ起動済みであることが分かっている場合の手動 reload
 #   - nginx コンテナの動作確認
 
 - name: Reload Nginx (hot reload only)

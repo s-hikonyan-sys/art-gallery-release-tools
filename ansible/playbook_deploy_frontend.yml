@@ -1,6 +1,6 @@
 ---
-# Frontend デプロイ専用プレイブック
-# CI でビルドされた Artifact をダウンロードして配置し、Nginx をホットリロードする
+# Frontend: 手動一括デプロイ（compose → 成果物配置 → Nginx 起動確認後リロード）
+# CI では deploy_frontend ワークフローが複数プレイブックで順序を制御する
 
 - name: Deploy Frontend Application
   hosts: "{{ target_hosts }}"
@@ -23,9 +23,10 @@
       tags:
         - deploy-frontend
 
-    - name: Reload nginx (conf reload only, no git pull)
+    - name: Ensure nginx is running and reload configuration
       ansible.builtin.include_role:
         name: nginx
-        tasks_from: reload
+        tasks_from: safe_reload_with_start
       tags:
         - reload-nginx
+        - deploy-frontend

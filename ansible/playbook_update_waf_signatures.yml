@@ -1,0 +1,24 @@
+---
+# WAF シグネチャ更新（定期メンテ用）
+# 前提: nginx コンテナが running であること
+
+- name: Update WAF signatures
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Update WAF signatures
+      ansible.builtin.shell: |
+        docker exec {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} \
+          /bin/sh -c "cd {{ waf_install_dir | mandatory('waf_install_dir must be set via extra-vars') }} && make update 2>&1"
+      register: waf_sig_update_result
+      changed_when: waf_sig_update_result.rc == 0
+      tags:
+        - update-waf-signatures
+
+    - name: Show WAF signature update result
+      ansible.builtin.debug:
+        msg: "{{ waf_sig_update_result.stdout_lines | default([]) }}"
+      when: waf_sig_update_result is defined
+      tags:
+        - update-waf-signatures

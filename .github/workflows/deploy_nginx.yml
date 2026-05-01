@@ -135,34 +135,36 @@ jobs:
           VARS_EOF
           chmod 600 /tmp/ansible_vars.json
 
-      - name: Deploy Nginx Configuration
+      - name: Deploy Nginx (workflow-driven)
         run: |
+          set -euo pipefail
           cd ansible
+          INV=(--inventory inventory/production.yml --extra-vars "@/tmp/ansible_vars.json")
+          CODE="${{ github.event.inputs.run_deploy_code }}"
+          IMG="${{ github.event.inputs.run_deploy_image }}"
+          WAF="${{ github.event.inputs.run_setup_waf }}"
 
-          TAGS=""
-          if [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
-            TAGS="deploy-nginx"
+          echo "::notice::nginx のリロード・WAF（docker exec）は nginx コンテナが起動している必要があります。"
+          echo "::notice::WAF や将来追加する疎通テストを実行する前に、必要なら playbook_reload_nginx_safe で起動を保証します。"
+
+          ansible-playbook playbook_deploy_nginx_compose.yml "${INV[@]}"
+
+          if [ "$CODE" = "true" ]; then
+            ansible-playbook playbook_deploy_nginx_config.yml "${INV[@]}"
           fi
 
-          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
-            [ -n "$TAGS" ] && TAGS="$TAGS,"
-            TAGS="${TAGS}deploy-compose,update-nginx-image"
+          if [ "$IMG" = "true" ]; then
+            ansible-playbook playbook_deploy_nginx_image.yml "${INV[@]}"
+          elif [ "$CODE" = "true" ]; then
+            ansible-playbook playbook_reload_nginx_safe.yml "${INV[@]}"
           fi
 
-          if [ "${{ github.event.inputs.run_setup_waf }}" == "true" ]; then
-            [ -n "$TAGS" ] && TAGS="$TAGS,"
-            TAGS="${TAGS}setup-waf"
+          if [ "$WAF" = "true" ]; then
+            if [ "$IMG" != "true" ] && [ "$CODE" != "true" ]; then
+              ansible-playbook playbook_reload_nginx_safe.yml "${INV[@]}"
+            fi
+            ansible-playbook playbook_setup_waf.yml "${INV[@]}"
           fi
-
-          if [ -z "$TAGS" ]; then
-            echo "::error::デプロイのオプションが選択されていません"
-            exit 1
-          fi
-
-          ansible-playbook playbook_deploy_nginx.yml \
-            --inventory inventory/production.yml \
-            --extra-vars "@/tmp/ansible_vars.json" \
-            --tags "$TAGS"
 
       - name: Append nginx deploy manifest entry
         env:
@@ -180,8 +182,10 @@ jobs:
             DEPLOY_TYPE="both"
           elif [ "$IMG" = "true" ]; then
             DEPLOY_TYPE="image"
-          else
+          elif [ "$CODE" = "true" ]; then
             DEPLOY_TYPE="code"
+          else
+            DEPLOY_TYPE="waf_only"
           fi
 
           OWNER=$(yq -r '.github_owner' ansible/group_vars/all.yml)

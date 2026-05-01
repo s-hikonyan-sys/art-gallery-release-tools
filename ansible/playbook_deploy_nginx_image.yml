@@ -1,23 +1,13 @@
 ---
-# Nginx: 手動一括デプロイ（compose → 設定 → イメージ更新）
-# CI では deploy_nginx ワークフローが複数プレイブックで順序を制御する
-# WAF 初期設定: playbook_setup_waf.yml / シグネチャ更新: playbook_update_waf_signatures.yml
+# Nginx: イメージ Pull とコンテナ再作成のみ
+# CI では playbook_deploy_nginx_compose.yml の後に実行すること
+# 前提: ホスト上に frontend 成果物と nginx.conf が存在すること（未配置なら失敗）
 
-- name: Deploy Nginx (full manual)
+- name: Deploy Nginx container image
   hosts: "{{ target_hosts }}"
   become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
 
   tasks:
-    - name: Deploy docker-compose.yml
-      ansible.builtin.include_role:
-        name: docker
-        tasks_from: deploy_compose
-
-    - name: Deploy nginx config files (source and config)
-      ansible.builtin.include_role:
-        name: nginx
-        tasks_from: deploy
-
     - name: Check prerequisites for nginx container update
       block:
         - name: Stat frontend dist (index.html)
@@ -34,16 +24,20 @@
           ansible.builtin.fail:
             msg: >-
               Frontendの成果物が見つかりません: {{ deployment_paths.dist_dir }}/frontend/index.html
-              先に Frontend をデプロイしてください。
+              先に Frontend をデプロイしてください（Deploy Frontend ワークフロー等）。
           when: not nginx_prereq_frontend.stat.exists
 
         - name: Fail if nginx config is missing
           ansible.builtin.fail:
             msg: >-
               Nginx の設定ファイルが見つかりません: {{ deployment_paths.conf_dir }}/nginx/nginx.conf
+              先に Nginx 設定デプロイ（run_deploy_code）を実行してください。
           when: not nginx_prereq_conf.stat.exists
 
     - name: Update nginx container image (pull + recreate)
       ansible.builtin.include_role:
         name: docker
         tasks_from: container/update/update_nginx_image
+      tags:
+        - docker
+        - update-nginx-image

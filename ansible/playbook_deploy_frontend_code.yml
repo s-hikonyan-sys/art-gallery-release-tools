@@ -1,0 +1,14 @@
+---
+# Frontend: Artifact のダウンロードと静的ファイル配置のみ（Nginx リロードなし）
+
+- name: Deploy Frontend artifacts only
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Deploy frontend (download artifact and place)
+      ansible.builtin.include_role:
+        name: frontend
+        tasks_from: deploy
+      tags:
+        - deploy-frontend

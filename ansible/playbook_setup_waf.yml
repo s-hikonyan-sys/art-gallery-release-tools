@@ -1,0 +1,15 @@
+---
+# Nginx: WAF 初期設定のみ（コンテナ内 docker exec）
+# 実行前に nginx コンテナが起動している必要がある（playbook_reload_nginx_safe.yml 等で保証）
+
+- name: Nginx WAF initial setup
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: WAF initial setup (license, signature URL, first update)
+      ansible.builtin.include_role:
+        name: nginx
+        tasks_from: setup_waf
+      tags:
+        - setup-waf
