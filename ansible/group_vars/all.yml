@@ -66,7 +66,7 @@ docker_volume_waf_sig: "{{ app_name }}_waf_sig"
 # WAF コンテナパス等は GitHub Actions の Secrets から --extra-vars（ansible_vars.json）で渡す。
 # 必要な変数: waf_install_dir, waf_conf_container_path, waf_data_container_path,
 #             waf_main_conf_filename, waf_update_conf_filename
-# コマンド構造（make reconfig / make update）はコード側で定義する。
+# WAF 反映・シグネチャ更新コマンドはコード側（setup_waf / update_waf_signatures）で定義する。
 # nginx ベースイメージ名（2層イメージ戦略のベース層）
 # バージョン形式はプライベートリポジトリ側で管理
 nginx_base_image_repo: "nginx-base"

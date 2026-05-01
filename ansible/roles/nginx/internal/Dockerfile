@@ -8,11 +8,6 @@
 ARG BASE_VERSION
 FROM ghcr.io/s-hikonyan-sys/nginx-base:${BASE_VERSION}
 
-# WAF: setup_waf / シグネチャ更新で make reconfig / make update をコンテナ内で実行するため
-# nginx-base の runtime ステージには make が含まれない
-RUN apt-get update && apt-get install -y --no-install-recommends make \
-    && rm -rf /var/lib/apt/lists/*
-
 # entrypoint をイメージに含める
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

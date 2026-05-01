@@ -90,28 +90,31 @@
     - setup-waf
 
 # --- 設定適用 ---
+# Makefile の reconfig は $(NGINXBIN) 等がコンテナ内で空になり得るため、
+# nginx リロード + notify の reload を直接実行する（SiteGuard の reconfig ターゲットと同等）。
 - name: Apply WAF configuration
   ansible.builtin.shell: |
     docker exec {{ container_names.nginx }} \
-      /bin/sh -c "cd {{ waf_install_dir | mandatory }} && make reconfig 2>&1 || true"
+      /bin/sh -c "set -e && nginx -t && nginx -s reload && cd {{ waf_install_dir | mandatory | quote }} && ./rc.siteguardlite_notify reload"
   register: waf_reconfig
-  changed_when: waf_reconfig.rc == 0
+  changed_when: true
   tags:
     - nginx
     - setup-waf
 
-- name: Show WAF reconfig output
+- name: Show WAF configuration apply output
   ansible.builtin.debug:
-    msg: "{{ waf_reconfig.stdout_lines }}"
+    msg: "{{ waf_reconfig.stdout_lines | default([]) }}"
   tags:
     - nginx
     - setup-waf
 
 # --- 初回シグネチャ更新 ---
+# Makefile に update ターゲットは無い。シグネチャ更新は ./dbupdate_waf。
 - name: Run initial WAF signature update
   ansible.builtin.shell: |
     docker exec {{ container_names.nginx }} \
-      /bin/sh -c "cd {{ waf_install_dir | mandatory }} && make update 2>&1"
+      /bin/sh -c "set -e && cd {{ waf_install_dir | mandatory | quote }} && ./dbupdate_waf"
   register: waf_update
   changed_when: waf_update.rc == 0
   tags:
@@ -128,9 +131,8 @@
 - name: WAF initial setup completed
   ansible.builtin.debug:
     msg: >-
-      WAF 初期設定が完了しました。
-      次のステップ: nginx.conf に WAF include が追加されていることを確認し、
-      nginx -s reload でリロードしてください。
+      WAF 初期設定が完了しました（設定反映で nginx をリロード済み）。
+      必要に応じて nginx.conf の WAF include を確認してください。
   tags:
     - nginx
     - setup-waf
