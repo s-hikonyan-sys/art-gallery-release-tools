@@ -6,4 +6,12 @@
 # ref_commit_sha: コード側のコミット（nginx_code_manifest または git ls-remote）
 # image_source_sha: イメージビルド時のソースコミット（nginx_version_manifest）
 
-nginx_deployments: []
+nginx_deployments:
+  - timestamp: "2026-05-01T17:45:53Z"
+    deploy_type: both
+    release_version: 1.0.0
+    code_version: null
+    nginx_ref: main
+    ref_commit_sha: 6696f2012636de1062a548364a48edd017eeba8d
+    image_source_sha: d2089453f6a5881b7dc751b051ead62c4eaa415d
+    workflow_run_url: https://github.com/s-hikonyan-sys/art-gallery-release-tools/actions/runs/25225421092
