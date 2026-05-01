@@ -10,7 +10,9 @@
 #                 waf_main_conf_filename, waf_update_conf_filename,
 #                 waf_update_base_url, waf_update_path_suffix（LATEST_URL 用・GitHub Secrets）
 #
-# dbupdate.conf: dbupdate_waf は perl で sig_download_user / sig_download_pass を読む（SUPPORT_ID 系は未使用）
+# dbupdate.conf: イメージでは dbupdate_waf_url.conf へのシンボリックリンク。
+# dbupdate_waf は perl で同ファイルから sig_download_* を読み、後続で . dbupdate_waf_url.conf により
+# LATEST_URL / HEADER_INI_URL も再読込する。URL は siteguardlite_sp 系に Secrets で揃える。
 #
 # 実行方法（手動）:
 #   ansible-playbook playbook_setup_waf.yml \
@@ -49,17 +51,42 @@
     - nginx
     - setup-waf
 
-- name: Switch WAF signature update URL
+- name: Derive HEADER_INI_URL from signature ZIP URL
+  ansible.builtin.set_fact:
+    waf_header_ini_url: "{{ waf_latest_download_url | regex_replace('/[^/]+\\.zip$', '/header.ini') }}"
+  tags:
+    - nginx
+    - setup-waf
+
+- name: Switch WAF signature update URL and header.ini URL
   ansible.builtin.shell: |
     docker exec \
       -e FINAL_URL={{ waf_latest_download_url | quote }} \
+      -e HEADER_URL={{ waf_header_ini_url | quote }} \
       {{ container_names.nginx }} \
       /bin/sh -c '
-        CONF="{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}"
-        if [ -f "$CONF" ]; then
-          sed -i "s|^LATEST_URL=.*|LATEST_URL=${FINAL_URL}|" "$CONF"
+        CONF_LINK="{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}"
+        if [ -L "$CONF_LINK" ]; then
+          CONF=$(readlink -f "$CONF_LINK")
         else
-          echo "LATEST_URL=${FINAL_URL}" > "$CONF"
+          CONF="$CONF_LINK"
+        fi
+        if [ -f "$CONF" ]; then
+          if grep -q "^LATEST_URL=" "$CONF" 2>/dev/null; then
+            sed -i "s|^LATEST_URL=.*|LATEST_URL=${FINAL_URL}|" "$CONF"
+          else
+            echo "LATEST_URL=${FINAL_URL}" >> "$CONF"
+          fi
+          if grep -q "^HEADER_INI_URL=" "$CONF" 2>/dev/null; then
+            sed -i "s|^HEADER_INI_URL=.*|HEADER_INI_URL=${HEADER_URL}|" "$CONF"
+          else
+            echo "HEADER_INI_URL=${HEADER_URL}" >> "$CONF"
+          fi
+        else
+          {
+            echo "LATEST_URL=${FINAL_URL}"
+            echo "HEADER_INI_URL=${HEADER_URL}"
+          } > "$CONF_LINK"
         fi
       '
   register: waf_url_result
@@ -85,7 +112,7 @@
     - nginx
     - setup-waf
 
-# GitHub Secrets の WAF_SUPPORT_ID / WAF_PASSWORD を、スクリプトが参照するキー名で書く
+# GitHub Secrets → sig_download_*（旧 SUPPORT_* / 誤った == 行を除いてから追記）
 - name: Set WAF signature download credentials for dbupdate_waf
   ansible.builtin.shell: |
     docker exec \
@@ -93,19 +120,43 @@
       -e SIG_P={{ waf_password | mandatory | quote }} \
       {{ container_names.nginx }} \
       /bin/sh -c '
-        CONF="{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}"
-        if grep -q "^sig_download_user=" "$CONF" 2>/dev/null; then
-          sed -i "s|^sig_download_user=.*|sig_download_user=${SIG_U}|" "$CONF"
+        CONF_LINK="{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}"
+        if [ -L "$CONF_LINK" ]; then
+          CONF=$(readlink -f "$CONF_LINK")
         else
-          echo "sig_download_user=${SIG_U}" >> "$CONF"
+          CONF="$CONF_LINK"
         fi
-        if grep -q "^sig_download_pass=" "$CONF" 2>/dev/null; then
-          sed -i "s|^sig_download_pass=.*|sig_download_pass=${SIG_P}|" "$CONF"
+        SIG_U=$(printf %s "$SIG_U" | sed "s/^[[:space:]]*//;s/[[:space:]]*$//")
+        SIG_P=$(printf %s "$SIG_P" | sed "s/^[[:space:]]*//;s/[[:space:]]*$//")
+        tmp="${CONF}.ansible.$$"
+        if [ -f "$CONF" ]; then
+          grep -vE "^(sig_download_user|sig_download_pass|SUPPORT_ID|SUPPORT_PASSWORD)=" "$CONF" > "$tmp"
         else
-          echo "sig_download_pass=${SIG_P}" >> "$CONF"
+          : > "$tmp"
         fi
+        mv "$tmp" "$CONF"
+        printf "%s\n" "sig_download_user=${SIG_U}" "sig_download_pass=${SIG_P}" >> "$CONF"
       '
   no_log: true
+  tags:
+    - nginx
+    - setup-waf
+
+# dbupdate.conf が通常ファイルになっていると url 側と内容が分岐する。. dbupdate_waf_url.conf が古い URL のままになるため同期する。
+- name: Reconcile dbupdate_waf_url.conf if dbupdate.conf is not a symlink
+  ansible.builtin.shell: |
+    docker exec {{ container_names.nginx }} \
+      /bin/sh -c '
+        LINK="{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}"
+        URLB="{{ waf_conf_container_path }}/dbupdate_waf_url.conf"
+        if [ -f "$LINK" ] && [ ! -L "$LINK" ] && [ -f "$URLB" ]; then
+          if ! cmp -s "$LINK" "$URLB"; then
+            cp -f "$LINK" "$URLB" && echo reconciled
+          fi
+        fi
+      '
+  register: reconcile_dbupdate_url
+  changed_when: "'reconciled' in (reconcile_dbupdate_url.stdout | default(''))"
   tags:
     - nginx
     - setup-waf
@@ -154,7 +205,10 @@
   ansible.builtin.debug:
     msg: >-
       WAF 初期設定が完了しました（設定反映で nginx をリロード済み）。
-      必要に応じて nginx.conf の WAF include を確認してください。
+      手動で dbupdate_waf を sed 改変した場合は、コンテナ再作成でイメージのスクリプトに戻すか、
+      VPS 上で
+      mv /opt/jp-secure/siteguardlite/dbupdate_waf.bak /opt/jp-secure/siteguardlite/dbupdate_waf
+      を実行してください。
   tags:
     - nginx
     - setup-waf
