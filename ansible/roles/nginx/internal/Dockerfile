@@ -8,8 +8,8 @@
 ARG BASE_VERSION
 FROM ghcr.io/s-hikonyan-sys/nginx-base:${BASE_VERSION}
 
-# dbupdate_waf（シグネチャ更新）が wget を呼ぶ。nginx-base の runtime には含まれない
-RUN apt-get update && apt-get install -y --no-install-recommends wget \
+# dbupdate_waf（シグネチャ更新）が wget / make を呼ぶ。nginx-base の runtime には含まれない
+RUN apt-get update && apt-get install -y --no-install-recommends wget make \
     && rm -rf /var/lib/apt/lists/*
 
 # entrypoint をイメージに含める
