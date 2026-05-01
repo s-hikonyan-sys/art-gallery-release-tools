@@ -244,7 +244,7 @@ graph TB
   `build_nginx.yml` — **2層イメージ戦略のアプリ層**。プライベートリポジトリの nginx-base をベースに entrypoint.sh を追加し GHCR にプッシュ（`manifest/nginx/image/nginx_version_manifest.yml` を PR で更新）
 - **登録**: `register_backend_code.yml` — 本番に載せるコード版を `manifest/backend/code/backend_code_manifest.yml` に記録（PR）
 - **デプロイ**: `deploy_backend.yml` — Backend のコード反映・イメージ pull/再起動（`release_version` / `code_version` は各マニフェストのキーを参照。成功後 `manifest/backend/deploy/backend_deploy_manifest.yml` を PR で更新）  
-  `deploy_database.yml` — postgres-entrypoint.sh を配置し DB マイグレーションを適用  
+  `deploy_database.yml` — 入力に応じて `playbook_deploy_database_{code,infra,migrate}.yml` を順に実行（コード配置・compose/イメージ・マイグレーションを分離）  
   `deploy_secrets.yml` — `write-secrets-files` アクションで設定ファイルを生成し Secrets API コンテナを再起動  
   `deploy_frontend.yml` — GitHub Artifact をダウンロードして `dist/frontend/` に展開後、Nginx をホットリロード  
   `deploy_nginx.yml` — `nginx.conf` を git pull で取得・配置し、`nginx -s reload` でホットリロード。`run_setup_waf=true` で WAF 初期設定も実施可能
@@ -269,7 +269,7 @@ graph TB
    - `postgres-entrypoint.sh` が `tokens/database_token.txt` を読み込む（ro マウント）  
    - `GET /secrets/database/password`（Bearer トークン認証）でパスワードを取得  
    - 取得したパスワードを `POSTGRES_PASSWORD` に設定し公式 entrypoint を実行  
-   - **DB マイグレーション**（`deploy_database.yml` の `database-migration` タグ）は、起動後に postgres コンテナ内から `migration_token.txt` で同じエンドポイントを再度呼び出し、平文パスワードを Ansible に渡さずに `psql` を実行する（`database_token` は起動時に既に消費済みのため）
+   - **DB マイグレーション**（`playbook_deploy_database_migrate.yml`、または一括用 `playbook_deploy_database.yml` の `database-migration` タグ）は、起動後に postgres コンテナ内から `migration_token.txt` で同じエンドポイントを再度呼び出し、平文パスワードを Ansible に渡さずに `psql` を実行する（`database_token` は起動時に既に消費済みのため）
 
 3. **art-gallery-api**（`depends_on: postgres healthy` + `secrets-api healthy`）が起動  
    - `tokens/backend_token.txt` を読み込む（ro マウント）  

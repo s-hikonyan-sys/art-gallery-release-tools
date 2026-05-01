@@ -44,8 +44,10 @@ jobs:
 
       - name: Validate Inputs
         run: |
-          if [ "${{ github.event.inputs.run_deploy_image }}" != "true" ] && [ "${{ github.event.inputs.run_deploy_migrations }}" != "true" ]; then
-            echo "::error::'run_deploy_image' または 'run_deploy_migrations' の少なくとも一方は 'true' に設定してください。"
+          if [ "${{ github.event.inputs.run_deploy_image }}" != "true" ] && \
+             [ "${{ github.event.inputs.run_deploy_migrations }}" != "true" ] && \
+             [ "${{ github.event.inputs.run_deploy_code }}" != "true" ]; then
+            echo "::error::run_deploy_image / run_deploy_code / run_deploy_migrations の少なくとも一方を true にしてください。"
             exit 1
           fi
 
@@ -99,29 +101,22 @@ jobs:
           VARS_EOF
           chmod 600 /tmp/ansible_vars.json
 
-      - name: Deploy Database
+      - name: Deploy Database (code → infra → migrations の順で用途別プレイブックを実行)
         run: |
-          TAGS=""
-
-          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
-            TAGS="deploy-compose,update-postgres-image"
-          fi
-          
-          if [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
-            [ -n "$TAGS" ] && TAGS="$TAGS,"
-            TAGS="${TAGS}deploy-database-code" # コードデプロイのみ
-          fi
-
-          if [ "${{ github.event.inputs.run_deploy_migrations }}" == "true" ]; then
-            [ -n "$TAGS" ] && TAGS="$TAGS,"
-            TAGS="${TAGS}database-migration" # マイグレーション実行のみ
-          fi
-
+          set -euo pipefail
           cd ansible
-          ansible-playbook playbook_deploy_database.yml \
-            --inventory inventory/production.yml \
-            --extra-vars "@/tmp/ansible_vars.json" \
-            --tags "$TAGS"
+          INV="--inventory inventory/production.yml"
+          EV="--extra-vars @/tmp/ansible_vars.json"
+
+          if [ "${{ github.event.inputs.run_deploy_code }}" == "true" ]; then
+            ansible-playbook playbook_deploy_database_code.yml $INV $EV
+          fi
+          if [ "${{ github.event.inputs.run_deploy_image }}" == "true" ]; then
+            ansible-playbook playbook_deploy_database_infra.yml $INV $EV
+          fi
+          if [ "${{ github.event.inputs.run_deploy_migrations }}" == "true" ]; then
+            ansible-playbook playbook_deploy_database_migrate.yml $INV $EV
+          fi
 
       - name: Remove sensitive files
         if: always()

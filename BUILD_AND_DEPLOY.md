@@ -88,11 +88,11 @@ nginx_deploy_manifest_path: "manifest/nginx/deploy/nginx_deploy_manifest.yml"
 ### 6.2 ビルド・デプロイで使うもの
 
 - **イメージ**: `build_database.yml` が Postgres 系イメージをビルドし、タグは `release_version`（未指定時はリポジトリ変数 `RELEASE_VERSION`）に合わせます。ビルド成功後は `manifest/database/image/database_version_manifest.yml` 更新の PR を作成します。
-- **デプロイ**: `deploy_database.yml` の `run_deploy_image` / `run_deploy_code` / `run_deploy_migrations`、`database_ref`、`database_target_version` など。Ansible 経由でサーバー上のリポジトリ取得・マイグレーション実行に使われます。
+- **デプロイ**: `deploy_database.yml` が用途に応じて Ansible プレイブックを順に呼び出します。**コード**は `playbook_deploy_database_code.yml`、**compose + Postgres イメージ**は `playbook_deploy_database_infra.yml`、**マイグレーション**は `playbook_deploy_database_migrate.yml`。一括・タグ指定用に `playbook_deploy_database.yml` も残しています。入力は `run_deploy_code` / `run_deploy_image` / `run_deploy_migrations`、`database_ref`、`database_target_version` など。
 
 ### 6.3 ワークフロー上の注意（入力検証）
 
-- 現状の `deploy_database.yml` では、**`run_deploy_image` または `run_deploy_migrations` の少なくとも一方を `true`** にしないと検証エラーになります。コード（マイグレーション以外）のみ更新する場合の扱いは、運用に合わせて入力の組み合わせを確認してください。
+- **`run_deploy_code` / `run_deploy_image` / `run_deploy_migrations` の少なくとも一方を `true`** にしてください。複数 `true` のときは **コード → インフラ → マイグレーション** の順で実行されます。マイグレーションのみ実行する場合は、Postgres コンテナが既に起動している必要があります。
 
 ---
 

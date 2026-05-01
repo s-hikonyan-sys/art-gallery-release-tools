@@ -1,0 +1,12 @@
+---
+# DB マイグレーションのみ（postgres コンテナが存在し接続可能であることが前提）
+# GitHub Actions: deploy_database.yml の run_deploy_migrations から呼ぶ。
+
+- name: Run database migrations
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+  tasks:
+    - name: Apply database migrations
+      ansible.builtin.include_role:
+        name: database
+        tasks_from: migrate

@@ -1,0 +1,12 @@
+---
+# データベース用コードのみデプロイ（entrypoint、migrations 取得、scripts 配置）
+# インフラ（docker-compose / イメージ更新）やマイグレーションは含まない。
+# GitHub Actions: deploy_database.yml の run_deploy_code から呼ぶ。
+
+- name: Deploy database code
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+  tasks:
+    - name: Deploy database role (scripts / migrations 取得のみ)
+      ansible.builtin.include_role:
+        name: database

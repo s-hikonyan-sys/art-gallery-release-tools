@@ -1,0 +1,17 @@
+---
+# docker-compose.yml の配置と PostgreSQL イメージの pull・再作成
+# GitHub Actions: deploy_database.yml の run_deploy_image から呼ぶ。
+
+- name: Deploy database Docker infrastructure
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+  tasks:
+    - name: Deploy docker-compose.yml
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: deploy_compose
+
+    - name: Update PostgreSQL image and recreate container
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: container/update/update_postgres_image

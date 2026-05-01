@@ -1,7 +1,10 @@
 ---
+# コード → compose → イメージ更新 → マイグレーションの一括実行（ローカルやタグ指定用）
+# CI では playbook_deploy_database_{code,infra,migrate}.yml を用途別に呼ぶことを推奨。
+
 - name: Deploy Database
   hosts: "{{ target_hosts }}"
-  become: "{{ ansible_become }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
   tasks:
     - name: Deploy database code
       ansible.builtin.include_role: { name: database }

@@ -34,8 +34,3 @@
   ansible.builtin.include_tasks: deploy.yml  
   tags:    
     - deploy-database-code
-
-- name: Include migration tasks  
-  ansible.builtin.include_tasks: migrate.yml  
-  tags:    
-    - database-migration
