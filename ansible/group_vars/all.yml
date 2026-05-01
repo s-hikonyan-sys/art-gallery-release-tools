@@ -55,7 +55,8 @@ frontend_url: "{{ 'https' if ssl_enabled else 'http' }}://{{ domain_name }}"
 # Dockerネットワーク名
 docker_network_name: "{{ app_name }}-network"
 
-secrets_api_url: "http://art-gallery-secrets-api:5000"
+# コンテナ間 HTTP（docker-compose ネットワーク内のサービス名 = container_name）
+secrets_api_url: "http://{{ container_names.secrets }}:5000"
 
 # Dockerボリューム名
 docker_volume_postgres_data: "{{ app_name }}_postgres_data"

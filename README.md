@@ -261,14 +261,15 @@ graph TB
 
 1. **art-gallery-secrets-api**（`restart: no`）が最初に起動  
    - マウントされた `conf/secrets/config/` の `secrets.yaml.encrypted` と `config.yaml` を読み込む  
-   - 起動時に backend 用・database 用のワンタイムトークンを生成し、ホスト側の `conf/secrets/tokens/` に書き出す（rw マウント）  
+   - 起動時に database 用・backend 用・**マイグレーション（Ansible）用**のワンタイムトークン（`database_token.txt` / `backend_token.txt` / `migration_token.txt`）をホスト側の `conf/secrets/tokens/` に書き出す（rw マウント）  
    - ヘルスチェック: `GET /health` が通ると次のコンテナが起動可能になる  
-   - パスワードを配布し終えたら自動停止（`restart: no`）
+   - **3 種類すべてのトークンが消費されたあと**自動停止（`restart: no`）。マイグレーションを実行しない場合はタイムアウトで残トークンを掃除して終了する
 
 2. **art-gallery-db**（`depends_on: secrets-api healthy`）が起動  
    - `postgres-entrypoint.sh` が `tokens/database_token.txt` を読み込む（ro マウント）  
    - `GET /secrets/database/password`（Bearer トークン認証）でパスワードを取得  
-   - 取得したパスワードを `POSTGRES_PASSWORD` に設定し公式 entrypoint を実行
+   - 取得したパスワードを `POSTGRES_PASSWORD` に設定し公式 entrypoint を実行  
+   - **DB マイグレーション**（`deploy_database.yml` の `database-migration` タグ）は、起動後に postgres コンテナ内から `migration_token.txt` で同じエンドポイントを再度呼び出し、平文パスワードを Ansible に渡さずに `psql` を実行する（`database_token` は起動時に既に消費済みのため）
 
 3. **art-gallery-api**（`depends_on: postgres healthy` + `secrets-api healthy`）が起動  
    - `tokens/backend_token.txt` を読み込む（ro マウント）  

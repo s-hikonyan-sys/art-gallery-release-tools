@@ -76,7 +76,7 @@ ansible-vault edit vault/vault-config.yaml.vault.prod --vault-password-file .vau
 ### 4. アプリケーション実行時の復号と認証 (ワンタイムトークン)
 - **Secrets API 起動とトークン生成**:
     - `art-gallery-secrets-api` コンテナが最初に起動し、`secrets.yaml.encrypted` を復号してメモリ内に保持します。
-    - 起動直後に、共有ボリュームへ専用のワンタイムトークン（`database_token.txt`, `backend_token.txt` / 権限 `0600`）を生成します。
+    - 起動直後に、共有ボリュームへ専用のワンタイムトークン（`database_token.txt`, `backend_token.txt`, `migration_token.txt` / 権限 `0600`）を生成します。
 - **PostgreSQL / Backend の起動待機**:
     - DBおよびBackendコンテナは、トークンファイルが生成されるまで起動を待機します（リトライ機構付き）。
 - **認証とパスワード取得**:
