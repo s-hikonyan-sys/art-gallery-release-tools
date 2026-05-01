@@ -8,6 +8,10 @@
 - name: Ensure Secrets API is healthy before starting backend
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/ensure_secrets_healthy.yml"
+    apply:
+      tags:
+        - docker
+        - start-backend
   tags:
     - docker
     - start-backend
@@ -15,6 +19,10 @@
 - name: Ensure PostgreSQL is healthy before starting backend
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/ensure_postgres_healthy.yml"
+    apply:
+      tags:
+        - docker
+        - start-backend
   tags:
     - docker
     - start-backend

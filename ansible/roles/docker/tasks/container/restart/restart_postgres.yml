@@ -6,6 +6,10 @@
 - name: Ensure Secrets API is healthy before restarting Postgres
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/ensure_secrets_healthy.yml"
+    apply:
+      tags:
+        - docker
+        - restart-postgres
   tags:
     - docker
     - restart-postgres

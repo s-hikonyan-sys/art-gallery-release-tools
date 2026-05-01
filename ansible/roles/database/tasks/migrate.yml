@@ -10,6 +10,8 @@
   ansible.builtin.include_role:
     name: docker
     tasks_from: ensure_secrets_healthy
+    apply:
+      tags: [database-migration]
   tags: [database-migration]
 
 - name: Fetch DB password for migrations via secrets-api (migration one-time token)

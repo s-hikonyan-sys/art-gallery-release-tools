@@ -31,6 +31,14 @@
 **コンテナ内の entrypoint やシェルは、Docker ホスト上で別コンテナを起動できません。**  
 そのため「隣のコンテナが落ちていたら起こす」オーケストレーションは **Ansible（または compose 全体の up）側の責務**です。
 
+## タグ指定時の挙動（`apply`）
+
+`--tags database-migration` のようにタグで絞って実行すると、`include_tasks` / `include_role` で読み込んだ**内側のタスクには親のタグが自動では付かない**ため、共通の `ensure_secrets_healthy` がスキップされ得ます。
+
+そのため、各呼び出しで `apply: tags: [...]` を指定し、**そのプレイで使うタグと同じものを内側タスクにも付与**しています（`always` は使わない）。
+
+対象タグの例: `database-migration`、`update-postgres-image`、`start-postgres`、`restart-postgres`、`start-backend`、`restart-backend`、および併用の `docker`。
+
 ## `ensure_backend_dependencies.sh` との役割分担
 
 `roles/docker/files/ensure_backend_dependencies.sh` は主に **`update_backend_image`** から呼ばれ、次を**まとめて**行います。
