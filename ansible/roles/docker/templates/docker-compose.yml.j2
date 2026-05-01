@@ -58,8 +58,9 @@ services:
         condition: service_healthy
     volumes:
       - ./conf/backend/config:/conf/backend/config:ro
-      - ./logs/backend:/logs/backend:rw
       - ./src/{{ service_repo_names.backend }}:/app
+      # app.py は /app/logs に書き込むため、ホストの logs/backend をここにマウント（/app より後で上書き）
+      - ./logs/backend:/app/logs:rw
       - ./conf/secrets/tokens:/tokens/backend:ro
     restart: unless-stopped
     networks:
