@@ -7,8 +7,8 @@
 nginx:
   1.0.0:
     source_ref: base-v1.26.3-sg8.00-3
-    source_sha: 9328fb03df734b35473bd54cfd80321589745787
+    source_sha: f5f1dc6846bb9fb0b3ae28c1efdb9252047c2686
     image: ghcr.io/s-hikonyan-sys/art-gallery-nginx:1.0.0
-    build_run_id: "25215280380"
+    build_run_id: "25217866642"
     build_workflow: Build Nginx Image
     updated_at_utc: ""
