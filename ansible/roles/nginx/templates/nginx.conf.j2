@@ -1,5 +1,6 @@
 # Nginx（コンテナ内 listen は 80 / 443 固定。ホスト側ポートは docker-compose の ports でマッピング）
-# 2GB VPS 向け: worker / 接続数は控えめ、ログはバッファ、upstream keepalive で接続再利用
+# 2GB VPS 向け: worker / 接続数は控えめ、access_log はバッファ
+# WAF は SiteGuard_RootPath のみ（イメージ内に siteguard.conf は無い — モジュールはビルド時に組み込み済み）
 
 worker_processes auto;
 error_log /var/log/nginx/error.log warn;
@@ -61,7 +62,6 @@ http {
             return 301 https://$host$request_uri;
         }
 {% else %}
-        include {{ waf_install_dir | default('/opt/jp-secure/siteguardlite') }}/nginx/siteguard.conf;
         include /etc/nginx/conf.d/common_locations.inc;
 {% endif %}
     }
@@ -89,7 +89,6 @@ http {
         add_header X-XSS-Protection "1; mode=block" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-        include {{ waf_install_dir | default('/opt/jp-secure/siteguardlite') }}/nginx/siteguard.conf;
         include /etc/nginx/conf.d/common_locations.inc;
     }
 {% endif %}
