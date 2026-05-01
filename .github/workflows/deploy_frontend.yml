@@ -65,18 +65,6 @@ jobs:
           echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Write WAF paths file (gitignored)
-        run: |
-          cat > ansible/group_vars/waf_paths.yml << 'PATHS_EOF'
-          ---
-          waf_install_dir: "${{ secrets.WAF_INSTALL_DIR }}"
-          waf_conf_container_path: "${{ secrets.WAF_CONF_CONTAINER_PATH }}"
-          waf_data_container_path: "${{ secrets.WAF_DATA_CONTAINER_PATH }}"
-          waf_main_conf_filename: "${{ secrets.WAF_MAIN_CONF_FILENAME }}"
-          waf_update_conf_filename: "${{ secrets.WAF_UPDATE_CONF_FILENAME }}"
-          PATHS_EOF
-          chmod 600 ansible/group_vars/waf_paths.yml
-
       - name: Write Ansible extra-vars file
         run: |
           cat > /tmp/ansible_vars.json << 'VARS_EOF'
@@ -87,7 +75,12 @@ jobs:
             "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
             "frontend_artifact_id": "${{ env.FRONTEND_ARTIFACT_ID }}",
             "frontend_artifact_repo": "art-gallery-release-tools",
-            "github_token_frontend": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}"
+            "github_token_frontend": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}",
+            "waf_install_dir": "${{ secrets.WAF_INSTALL_DIR }}",
+            "waf_conf_container_path": "${{ secrets.WAF_CONF_CONTAINER_PATH }}",
+            "waf_data_container_path": "${{ secrets.WAF_DATA_CONTAINER_PATH }}",
+            "waf_main_conf_filename": "${{ secrets.WAF_MAIN_CONF_FILENAME }}",
+            "waf_update_conf_filename": "${{ secrets.WAF_UPDATE_CONF_FILENAME }}"
           }
           VARS_EOF
           chmod 600 /tmp/ansible_vars.json
@@ -102,6 +95,4 @@ jobs:
 
       - name: Remove sensitive files
         if: always()
-        run: |
-          rm -f /tmp/ansible_vars.json
-          rm -f ansible/group_vars/waf_paths.yml
+        run: rm -f /tmp/ansible_vars.json

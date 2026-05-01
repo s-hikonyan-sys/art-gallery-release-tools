@@ -67,8 +67,9 @@
 
     # --- 5. WAF 初期設定（初回のみ: setup-waf タグで明示実行）---
     # 実行条件: nginx コンテナ起動済み、ライセンス情報を extra-vars で渡すこと
-    # 必要 vars: waf_serial_key, waf_support_id, waf_password
-    # 必要ファイル: group_vars/waf_paths.yml（GitHub Actions が Secrets から生成）
+    # 必要 vars: waf_serial_key, waf_support_id, waf_password,
+    #            waf_install_dir, waf_conf_container_path, waf_data_container_path,
+    #            waf_main_conf_filename, waf_update_conf_filename（extra-vars）
     - name: WAF initial setup (license, signature URL, first update)
       ansible.builtin.include_role:
         name: nginx
@@ -81,7 +82,7 @@
     - name: Update WAF signatures
       ansible.builtin.shell: |
         docker exec {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} \
-          /bin/sh -c "cd {{ waf_install_dir | mandatory('waf_install_dir must be set in waf_paths.yml') }} && make update 2>&1"
+          /bin/sh -c "cd {{ waf_install_dir | mandatory('waf_install_dir must be set via extra-vars') }} && make update 2>&1"
       register: waf_sig_update_result
       changed_when: waf_sig_update_result.rc == 0
       when: "'update-waf-signatures' in ansible_run_tags"

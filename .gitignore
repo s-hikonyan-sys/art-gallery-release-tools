@@ -6,10 +6,6 @@
 ansible/.vault_pass
 .vault_pass
 vault_pass.txt
-# WAF 固有パス定義（プライベート情報のためリポジトリ管理外）
-# GitHub Actions ワークフローが Secrets から実行時に生成する
-ansible/group_vars/waf_paths.yml
-
 # ===========================================
 # Python
 # ===========================================

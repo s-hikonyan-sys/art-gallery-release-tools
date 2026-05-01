@@ -62,9 +62,7 @@ docker_volume_postgres_data: "{{ app_name }}_postgres_data"
 docker_volume_waf_conf: "{{ app_name }}_waf_conf"
 docker_volume_waf_sig: "{{ app_name }}_waf_sig"
 
-# WAF コンテナパスは group_vars/waf_paths.yml で定義する。
-# waf_paths.yml はリポジトリ管理外（.gitignore）。
-# GitHub Actions ワークフローが Secrets から生成してから Ansible を実行する。
+# WAF コンテナパス等は GitHub Actions の Secrets から --extra-vars（ansible_vars.json）で渡す。
 # 必要な変数: waf_install_dir, waf_conf_container_path, waf_data_container_path,
 #             waf_main_conf_filename, waf_update_conf_filename
 # コマンド構造（make reconfig / make update）はコード側で定義する。

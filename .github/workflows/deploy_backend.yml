@@ -124,18 +124,6 @@ jobs:
           echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      - name: Write WAF paths file (gitignored)
-        run: |
-          cat > ansible/group_vars/waf_paths.yml << 'PATHS_EOF'
-          ---
-          waf_install_dir: "${{ secrets.WAF_INSTALL_DIR }}"
-          waf_conf_container_path: "${{ secrets.WAF_CONF_CONTAINER_PATH }}"
-          waf_data_container_path: "${{ secrets.WAF_DATA_CONTAINER_PATH }}"
-          waf_main_conf_filename: "${{ secrets.WAF_MAIN_CONF_FILENAME }}"
-          waf_update_conf_filename: "${{ secrets.WAF_UPDATE_CONF_FILENAME }}"
-          PATHS_EOF
-          chmod 600 ansible/group_vars/waf_paths.yml
-
       - name: Write Ansible extra-vars file
         env:
           BACKEND_REF: ${{ env.BACKEND_REF }}
@@ -151,6 +139,11 @@ jobs:
             --arg sha "$BACKEND_SHA" \
             --arg ghb "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_BACKEND }}" \
             --arg ghr "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_RELEASE_TOOLS }}" \
+            --arg wid "${{ secrets.WAF_INSTALL_DIR }}" \
+            --arg wcp "${{ secrets.WAF_CONF_CONTAINER_PATH }}" \
+            --arg wdp "${{ secrets.WAF_DATA_CONTAINER_PATH }}" \
+            --arg wmf "${{ secrets.WAF_MAIN_CONF_FILENAME }}" \
+            --arg wuf "${{ secrets.WAF_UPDATE_CONF_FILENAME }}" \
             '{
               target_hosts: "production",
               prod_host: $ph,
@@ -159,7 +152,12 @@ jobs:
               backend_ref: $ref,
               backend_image_tag: $tag,
               github_token_backend: $ghb,
-              github_token_release_tools: $ghr
+              github_token_release_tools: $ghr,
+              waf_install_dir: $wid,
+              waf_conf_container_path: $wcp,
+              waf_data_container_path: $wdp,
+              waf_main_conf_filename: $wmf,
+              waf_update_conf_filename: $wuf
             } | if ($sha | length) > 0 then . + {backend_sha: $sha} else . end' \
             > /tmp/ansible_vars.json
           chmod 600 /tmp/ansible_vars.json
@@ -181,9 +179,7 @@ jobs:
 
       - name: Remove sensitive files
         if: always()
-        run: |
-          rm -f /tmp/ansible_vars.json
-          rm -f ansible/group_vars/waf_paths.yml
+        run: rm -f /tmp/ansible_vars.json
 
   record_deploy_manifest:
     name: Record deploy & open PR
