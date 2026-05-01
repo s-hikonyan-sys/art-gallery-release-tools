@@ -1,5 +1,21 @@
 ---
 # バックエンドコンテナの再起動
+#
+# restart 単体では依存サービスを起こさないため、secrets / postgres の healthy を先に保証する。
+
+- name: Ensure Secrets API is healthy before restarting backend
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/ensure_secrets_healthy.yml"
+  tags:
+    - docker
+    - restart-backend
+
+- name: Ensure PostgreSQL is healthy before restarting backend
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/ensure_postgres_healthy.yml"
+  tags:
+    - docker
+    - restart-backend
 
 - name: Restart backend container
   ansible.builtin.shell: |

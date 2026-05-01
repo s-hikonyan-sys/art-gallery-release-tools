@@ -1,6 +1,23 @@
 ---
 # バックエンドコンテナの起動
 # イメージが存在しない場合はプルを試みます
+#
+# compose の depends_on は「初回 up」に効きやすく、手動や ansible の shell だけで backend を動かす場合に
+# secrets/postgres が止まっていると失敗する。ここで healthy を保証する（docs/deployment_dependencies.md）。
+
+- name: Ensure Secrets API is healthy before starting backend
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/ensure_secrets_healthy.yml"
+  tags:
+    - docker
+    - start-backend
+
+- name: Ensure PostgreSQL is healthy before starting backend
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/ensure_postgres_healthy.yml"
+  tags:
+    - docker
+    - start-backend
 
 - name: Start backend container
   ansible.builtin.shell: |

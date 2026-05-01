@@ -1,0 +1,21 @@
+---
+# PostgreSQL が healthy になるまで docker compose up と待機する。
+# Backend 起動・再起動など、DB が稼働している前提のタスクで利用する。
+# （コンテナ内の entrypoint は隣コンテナを起動できないため、ホスト側 Ansible で順序を保証する）
+# 詳細: リポジトリ直下 docs/deployment_dependencies.md
+
+- name: Ensure PostgreSQL is healthy
+  ansible.builtin.shell: |
+    STATUS=$(docker inspect --format='{{ "{{.State.Health.Status}}" }}' {{ container_names.postgres }} 2>/dev/null || echo "missing")
+    if [ "$STATUS" != "healthy" ]; then
+      cd {{ deployment_paths.deployment_dir }}
+      docker compose up -d postgres
+      for i in {1..12}; do
+        if [ "$(docker inspect --format='{{ "{{.State.Health.Status}}" }}' {{ container_names.postgres }} 2>/dev/null)" == "healthy" ]; then
+          exit 0
+        fi
+        sleep 5
+      done
+      exit 1
+    fi
+  changed_when: false

@@ -2,6 +2,15 @@
 # DB マイグレーション用パスワードは postgres-entrypoint と同様、
 # migration_token.txt と secrets-api の GET /secrets/database/password で取得する。
 # （database_token は起動時に消費済みのため別トークンが必要）
+#
+# update-postgres-image を伴わないマイグレのみ実行しても secrets が Exited のままだと取得に失敗する。
+# コンテナ内シェルは隣コンテナを起動できないため、ホスト側で ensure_secrets_healthy を先に実行する。
+
+- name: Ensure Secrets API is healthy before migrations
+  ansible.builtin.include_role:
+    name: docker
+    tasks_from: ensure_secrets_healthy
+  tags: [database-migration]
 
 - name: Fetch DB password for migrations via secrets-api (migration one-time token)
   community.docker.docker_container_exec:
@@ -15,7 +24,10 @@
       \"${SECRETS_API_URL}/secrets/database/password\"
       | grep -o '\"password\":\"[^\"]*\"' | cut -d\" -f4"
   register: migration_db_password_fetch
-  until: migration_db_password_fetch.rc == 0 and (migration_db_password_fetch.stdout | trim | length) > 0
+  until:
+    - migration_db_password_fetch.rc is defined
+    - migration_db_password_fetch.rc == 0
+    - (migration_db_password_fetch.stdout | default('', true) | trim | length) > 0
   retries: 12
   delay: 5
   no_log: true

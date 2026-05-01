@@ -1,6 +1,15 @@
 ---
 # Postgres コンテナの起動
 # イメージが存在しない場合はプルを試みます
+#
+# entrypoint が secrets-api からパスワード取得するため、postgres 単体起動でも secrets を先に healthy にする。
+
+- name: Ensure Secrets API is healthy before starting Postgres
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/ensure_secrets_healthy.yml"
+  tags:
+    - docker
+    - start-postgres
 
 - name: Start postgres container
   ansible.builtin.shell: |

@@ -1,8 +1,11 @@
 ---
 # バックエンドコンテナのイメージを更新し、再作成・再起動する
+#
+# 以下のシェルは「イメージ更新時のクリーンな再発行」と「SSH 手動時の一発復旧」向けに、
+# stop/rm・トークン削除・secrets/postgres の起動待ちまでまとめている。
+# start/restart 用の Ansible タスクでは ensure_secrets_healthy / ensure_postgres_healthy で最小限の保証のみ行う。
+# 役割の違いは docs/deployment_dependencies.md を参照。
 
-# バックエンド依存（Secrets API・Database）をスクリプトで一括準備
-# （backend/secrets-api の停止・削除、トークン削除、Secrets API/Postgres の healthy 確保）
 - name: Ensure backend dependencies (secrets-api, postgres) are ready
   ansible.builtin.script: "{{ role_path }}/files/ensure_backend_dependencies.sh {{ deployment_paths.deployment_dir }} {{ container_names.secrets }} {{ container_names.postgres }}"
   changed_when: false

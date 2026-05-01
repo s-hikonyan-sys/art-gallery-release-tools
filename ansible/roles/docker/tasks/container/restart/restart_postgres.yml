@@ -1,5 +1,14 @@
 ---
 # Postgres コンテナの再起動
+#
+# restart 後も entrypoint 経路で secrets に依存するため、事前に secrets を healthy にする。
+
+- name: Ensure Secrets API is healthy before restarting Postgres
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/ensure_secrets_healthy.yml"
+  tags:
+    - docker
+    - restart-postgres
 
 - name: Restart postgres container
   ansible.builtin.shell: |
