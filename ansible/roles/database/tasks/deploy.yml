@@ -29,3 +29,13 @@
     remote_src: yes  
   tags:    
     - deploy-database-code
+
+- name: Copy run_migration.py to deployment directory
+  ansible.builtin.template:
+    src: run_migration.py.j2
+    dest: "{{ deployment_paths.deployment_dir }}/scripts/run_migration.py"
+    mode: '0755'
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+  tags:
+    - deploy-database-code

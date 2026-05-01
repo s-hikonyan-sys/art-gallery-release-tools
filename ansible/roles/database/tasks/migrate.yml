@@ -14,79 +14,31 @@
       tags: [database-migration]
   tags: [database-migration]
 
-- name: Fetch DB password for migrations via secrets-api (migration one-time token)
-  community.docker.docker_container_exec:
-    container: "{{ container_names.postgres | mandatory('container_names.postgres must be set in inventory') }}"
-    user: root
-    # postgres-entrypoint.sh と同じ JSON 抽出（コンテナ内に jq がない前提）
-    command: >-
-      /bin/bash -lc "set -euo pipefail; source /app/secrets_api_config.sh;
-      TOKEN=$(cat /app/tokens/migration_token.txt);
-      curl -sf -H \"Authorization: Bearer ${TOKEN}\"
-      \"${SECRETS_API_URL}/secrets/database/password\"
-      | grep -o '\"password\":\"[^\"]*\"' | cut -d\" -f4"
-  register: migration_db_password_fetch
-  until:
-    - migration_db_password_fetch.rc is defined
-    - migration_db_password_fetch.rc == 0
-    - (migration_db_password_fetch.stdout | default('', true) | trim | length) > 0
-  retries: 12
+- name: Ensure migration helper script is deployed
+  ansible.builtin.template:
+    src: run_migration.py.j2
+    dest: "{{ deployment_paths.deployment_dir }}/scripts/run_migration.py"
+    mode: '0755'
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+  tags: [database-migration]
+
+- name: Copy migration helper script into postgres container
+  ansible.builtin.shell: |
+    docker cp "{{ deployment_paths.deployment_dir }}/scripts/run_migration.py" \
+      "{{ container_names.postgres | mandatory('container_names.postgres must be set in inventory') }}:/tmp/run_migration.py"
+  tags: [database-migration]
+
+- name: Run migrations in postgres container via secrets-api token flow
+  ansible.builtin.shell: |
+    docker exec -u root {{ container_names.postgres | mandatory('container_names.postgres must be set in inventory') }} \
+      python3 /tmp/run_migration.py \
+      --db-user {{ database_user }} \
+      --db-name {{ database_name }} \
+      --migrations-dir /app/migrations \
+      --target-version {{ database_migration.target_version }}
+  register: migrate_result
+  until: migrate_result.rc == 0
+  retries: 5
   delay: 5
-  no_log: true
-  tags: [database-migration]
-
-- name: Set db_password for migration tasks
-  ansible.builtin.set_fact:
-    db_password: "{{ migration_db_password_fetch.stdout | trim }}"
-  no_log: true
-  tags: [database-migration]
-
-- name: Ensure migration history table exists
-  community.docker.docker_container_exec:
-    container: "{{ container_names.postgres | mandatory('container_names.postgres must be set in inventory') }}"
-    command: psql -h localhost -U {{ database_user }} -d {{ database_name }} -W
-    stdin: |
-      {{ db_password }}
-      CREATE TABLE IF NOT EXISTS schema_migrations (
-          version VARCHAR(255) PRIMARY KEY,
-          applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    user: postgres
-  register: result
-  until: result is success
-  retries: 10
-  delay: 5
-  no_log: true
-  tags: [database-migration]
-
-- name: Get applied migrations
-  community.docker.docker_container_exec:
-    container: "{{ container_names.postgres | mandatory('container_names.postgres must be set in inventory') }}"
-    command: psql -h localhost -U {{ database_user }} -d {{ database_name }} -W -t -A -c "SELECT version FROM schema_migrations;"
-    stdin: "{{ db_password }}"
-    user: postgres
-  register: applied_migrations_raw
-  no_log: true
-  tags: [database-migration]
-
-- name: Find migration files
-  ansible.builtin.find:
-    paths: "{{ database_migration.migrations_base_path }}/v{{ database_migration.target_version }}"
-    patterns: "*.sql"
-  register: migration_files
-  delegate_to: localhost
-  tags: [database-migration]
-
-- name: Apply pending migrations
-  community.docker.docker_container_exec:
-    container: "{{ container_names.postgres | mandatory('container_names.postgres must be set in inventory') }}"
-    command: psql -h localhost -U {{ database_user }} -d {{ database_name }} -W
-    stdin: |
-      {{ db_password }}
-      {{ lookup('file', item.path) }}
-      INSERT INTO schema_migrations (version) VALUES ('{{ item.path | basename | replace('.sql', '') }}') ON CONFLICT DO NOTHING;
-    user: postgres
-  loop: "{{ migration_files.files | sort(attribute='path') }}"
-  when: item.path | basename | replace('.sql', '') not in applied_migrations_raw.stdout_lines
-  no_log: true
   tags: [database-migration]

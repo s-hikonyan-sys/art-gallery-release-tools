@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""DB マイグレーション実行スクリプト.
+
+secrets-api のワンタイムトークンを使いパスワードを取得し、psql 経由でマイグレーションを実行します。
+"""
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import json
+import logging
+import pathlib
+import re
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from enum import Enum
+from typing import Final, Optional, Set
+
+# --- SQL 定数 ---
+SQL_ENSURE_HISTORY_TABLE: Final = """
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version VARCHAR(255) PRIMARY KEY,
+    applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+SQL_LIST_APPLIED_VERSIONS: Final = "SELECT version FROM schema_migrations ORDER BY version;"
+
+def get_apply_migration_sql(version: str, body: str) -> str:
+    return f"""
+BEGIN;
+{body}
+INSERT INTO schema_migrations (version) VALUES ('{version}') ON CONFLICT DO NOTHING;
+COMMIT;
+"""
+
+# --- ロギング設定 ---
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s: %(message)s",
+    stream=sys.stdout,
+)
+logger = logging.getLogger(__name__)
+
+# --- 設定パス ---
+SECRETS_API_CONFIG_PATH: Final = pathlib.Path("/app/secrets_api_config.sh")
+MIGRATION_TOKEN_PATH: Final = pathlib.Path("/app/tokens/migration_token.txt")
+
+
+class MigrationErrorKind(Enum):
+    RETRYABLE = "retryable"
+    FATAL = "fatal"
+
+
+class MigrationError(Exception):
+    def __init__(self, message: str, kind: MigrationErrorKind = MigrationErrorKind.FATAL):
+        super().__init__(message)
+        self.kind = kind
+
+
+@dataclasses.dataclass(frozen=True)
+class MigrationConfig:
+    db_user: str
+    db_name: str
+    target_version: str
+    migrations_dir: pathlib.Path
+
+
+class SecretsApiClient:
+    """Secrets API クライアント (トークン再利用設計)"""
+
+    def __init__(self, config_path: pathlib.Path, token_path: pathlib.Path):
+        self._config_path = config_path
+        self._token_path = token_path
+        self._cached_password: Optional[str] = None
+
+    def _read_api_url(self) -> str:
+        if not self._config_path.exists():
+            raise MigrationError(f"Config missing: {self._config_path}")
+        content = self._config_path.read_text(encoding="utf-8")
+        if match := re.search(r'SECRETS_API_URL\s*=\s*"([^"]+)"', content):
+            return match.group(1)
+        raise MigrationError("SECRETS_API_URL not found in config")
+
+    def _read_token(self, max_retries: int = 5, retry_interval: float = 1.0) -> str:
+        for attempt in range(max_retries):
+            if self._token_path.exists():
+                token = self._token_path.read_text(encoding="utf-8").strip()
+                if token:
+                    return token
+            if attempt < max_retries - 1:
+                logger.info("Waiting for migration token... (%d/%d)", attempt + 1, max_retries)
+                time.sleep(retry_interval)
+        raise MigrationError(f"Migration token not found: {self._token_path}")
+
+    def get_password(self) -> str:
+        """パスワードを取得。一度取得したらキャッシュを返す。"""
+        if self._cached_password:
+            return self._cached_password
+
+        token = self._read_token()
+        url = f"{self._read_api_url()}/secrets/database/password"
+        req = urllib.request.Request(
+            url=url,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as res:
+                payload = json.loads(res.read().decode("utf-8"))
+        except urllib.error.URLError as e:
+            raise MigrationError(f"Secrets API unavailable: {e}", MigrationErrorKind.RETRYABLE)
+        except json.JSONDecodeError as e:
+            raise MigrationError(f"Invalid JSON from Secrets API: {e}")
+
+        password = payload.get("password")
+        if not password:
+            raise MigrationError("Password field missing in Secrets API response")
+
+        self._cached_password = password
+        return self._cached_password
+
+
+class MigrationRunner:
+    """マイグレーション実行クラス"""
+
+    def __init__(self, config: MigrationConfig, secrets_client: SecretsApiClient):
+        self._config = config
+        self._secrets = secrets_client
+
+    def _run_psql(self, sql: str, unaligned: bool = False) -> str:
+        password = self._secrets.get_password()
+        cmd = [
+            "psql", "-h", "localhost",
+            "-U", self._config.db_user,
+            "-d", self._config.db_name,
+            "-W", "-v", "ON_ERROR_STOP=1",
+        ]
+        if unaligned:
+            cmd.extend(["-t", "-A"])
+
+        try:
+            # input 経由でパスワードと SQL を安全に渡す
+            proc = subprocess.run(
+                cmd,
+                input=f"{password}\n{sql}",
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            return proc.stdout
+        except subprocess.CalledProcessError as e:
+            err_msg = e.stderr.strip() or "Unknown psql error"
+            raise MigrationError(f"psql failed: {err_msg}")
+
+    def run(self) -> None:
+        # 1. 履歴テーブルの存在を保証
+        self._run_psql(SQL_ENSURE_HISTORY_TABLE)
+
+        # 2. 適用済みバージョンを取得
+        applied_raw = self._run_psql(SQL_LIST_APPLIED_VERSIONS, unaligned=True)
+        applied_versions = {line.strip() for line in applied_raw.splitlines() if line.strip()}
+
+        # 3. 未適用ファイルの特定と実行
+        version_dir = self._config.migrations_dir / f"v{self._config.target_version}"
+        if not version_dir.exists():
+            raise MigrationError(f"Migration directory not found: {version_dir}")
+
+        for sql_file in sorted(version_dir.glob("*.sql")):
+            version = sql_file.stem
+            if version in applied_versions:
+                logger.debug("Skip (already applied): %s", version)
+                continue
+
+            logger.info("Applying: %s", version)
+            sql_body = sql_file.read_text(encoding="utf-8")
+            # トランザクション & 履歴挿入をセットで実行
+            self._run_psql(get_apply_migration_sql(version, sql_body))
+            logger.info("Success: %s", version)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Secure DB migration runner.")
+    parser.add_argument("--db-user", required=True)
+    parser.add_argument("--db-name", required=True)
+    parser.add_argument("--target-version", required=True)
+    parser.add_argument("--migrations-dir", default="/app/migrations")
+    args = parser.parse_args()
+
+    config = MigrationConfig(
+        db_user=args.db_user,
+        db_name=args.db_name,
+        target_version=args.target_version,
+        migrations_dir=pathlib.Path(args.migrations_dir),
+    )
+    secrets_client = SecretsApiClient(SECRETS_API_CONFIG_PATH, MIGRATION_TOKEN_PATH)
+    runner = MigrationRunner(config, secrets_client)
+
+    try:
+        runner.run()
+        return 0
+    except MigrationError as e:
+        logger.error("%s", e)
+        return 1
+    except Exception as e:
+        logger.exception("Unexpected error: %s", e)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

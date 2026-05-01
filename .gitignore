@@ -1,8 +1,7 @@
 # ===========================================
 # 機密情報・プライベートファイル
 # ===========================================
-!ansible/vault/*.example
-# Ansible Vaultパスワードファイル
+# Ansible Vault パスワードファイル（ansible-vault 利用時）
 ansible/.vault_pass
 .vault_pass
 vault_pass.txt

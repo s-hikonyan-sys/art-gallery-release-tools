@@ -12,7 +12,7 @@
 
 - **[GitHub リポジトリ設定（Actions / PR 前提）](docs/GITHUB_REPOSITORY_SETUP.md)**: マニフェスト PR・デプロイ記録 PR を Actions で作成するために必要なリポジトリ設定。
 - **[ビルド・デプロイとバージョン管理](BUILD_AND_DEPLOY.md)**: ビルド／デプロイ手順とマニフェストの役割・配置。
-- **[機密情報・暗号化運用ガイド](ansible/vault/README.md)**: GitHub Secrets を活用した事前暗号化フロー、および機密情報配布専用コンテナ（Secrets API）のライフサイクルについての詳細。
+- **機密情報・暗号化運用**: Fernet 事前暗号化・ワンタイムトークン・Secrets API の手順と挙動は **art-gallery-secrets** リポジトリの README を参照。本リポジトリでの Actions / PR 前提の設定は **[GitHub リポジトリ設定（Actions / PR 前提）](docs/GITHUB_REPOSITORY_SETUP.md)**。
 
 ## 特徴
 
@@ -105,9 +105,7 @@ art-gallery-release-tools/
     │   └── docker/
     │       ├── tasks/            # deploy_compose.yml / setup_startup_service.yml
     │       └── templates/        # docker-compose.yml.j2 / startup.sh.j2 / art-gallery.service.j2
-    ├── test_resources/           # CI テスト用リソース（inventory, playbook）
-    └── vault/
-        └── README.md             # 暗号化運用ガイド
+    └── test_resources/           # CI テスト用リソース（inventory, playbook）
 ```
 
 ## 全体構成図
