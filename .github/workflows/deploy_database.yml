@@ -28,7 +28,7 @@ on:
         default: 'main'
         type: string
       database_target_version:
-        description: 'マイグレーション対象バージョン (例: v1.1.0)'
+        description: 'マイグレーション対象バージョン (例: v1.1.0。未指定時は release_version と同じ優先順: 入力 → リポジトリ変数 RELEASE_VERSION)'
         required: false
         type: string
 
@@ -66,6 +66,12 @@ jobs:
           echo "RELEASE_VERSION=${VERSION}" >> $GITHUB_ENV
           echo "DATABASE_REF=${{ github.event.inputs.database_ref }}" >> $GITHUB_ENV
 
+          DB_TARGET="${{ github.event.inputs.database_target_version }}"
+          if [ -z "$DB_TARGET" ]; then
+            DB_TARGET="$VERSION"
+          fi
+          echo "DATABASE_TARGET_VERSION=${DB_TARGET}" >> $GITHUB_ENV
+
       - name: Install Ansible and dependencies
         run: |
           sudo apt-get update
@@ -90,7 +96,7 @@ jobs:
             "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
             "database_ref": "${{ env.DATABASE_REF }}",
             "postgres_image_tag": "${{ env.RELEASE_VERSION }}",
-            "database_target_version": "${{ github.event.inputs.database_target_version }}",
+            "database_target_version": "${{ env.DATABASE_TARGET_VERSION }}",
             "github_token_database": "${{ secrets.GH_TOKEN_FOR_ART_GALLERY_DATABASE }}",
             "waf_install_dir": "${{ secrets.WAF_INSTALL_DIR }}",
             "waf_conf_container_path": "${{ secrets.WAF_CONF_CONTAINER_PATH }}",
