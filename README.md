@@ -10,6 +10,7 @@
 
 ## 重要なドキュメント
 
+- **[GitHub リポジトリ設定（Actions / PR 前提）](docs/GITHUB_REPOSITORY_SETUP.md)**: マニフェスト PR・デプロイ記録 PR を Actions で作成するために必要なリポジトリ設定。
 - **[ビルド・デプロイとバージョン管理](BUILD_AND_DEPLOY.md)**: ビルド／デプロイ手順とマニフェストの役割・配置。
 - **[機密情報・暗号化運用ガイド](ansible/vault/README.md)**: GitHub Secrets を活用した事前暗号化フロー、および機密情報配布専用コンテナ（Secrets API）のライフサイクルについての詳細。
 

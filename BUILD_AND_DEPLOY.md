@@ -2,6 +2,8 @@
 
 このドキュメントは、`art-gallery-release-tools` における **ビルド／デプロイの手順**と、**どのファイルがバージョン・成果物とどう紐づくか**をまとめたものです。詳細な全体像は [README.md](README.md) を参照してください。
 
+**前提（初回のみ）**: マニフェスト更新やデプロイ記録の PR を Actions で自動作成するには、[GitHub リポジトリ設定（Actions / PR 前提）](docs/GITHUB_REPOSITORY_SETUP.md) のとおり、リポジトリで **Read and write** および **Allow GitHub Actions to create and approve pull requests** を有効にしてください。
+
 ## 1. 方針の要約
 
 - **手動デプロイ**: 各ワークフローは原則 `workflow_dispatch` で実行します。
