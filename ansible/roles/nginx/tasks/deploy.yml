@@ -82,8 +82,7 @@
 - name: Render WAF overlay on host (compose + entrypoint)
   ansible.builtin.include_tasks: waf_render_overlay_files.yml
   when:
-    - waf_support_id is defined
-    - waf_password is defined
+    - (waf_support_id is defined and waf_password is defined) or (waf_serial_key is defined)
   tags:
     - nginx
     - deploy-nginx

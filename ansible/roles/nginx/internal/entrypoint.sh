@@ -22,6 +22,11 @@ OVERLAY="${WAF_HOST_OVERLAY_DIR:-/tmp/host_waf_config}"
 CONF_NAME="${WAF_DBUPDATE_CONF_NAME:-dbupdate.conf}"
 
 if [ -d "$OVERLAY" ]; then
+    if [ -f "$OVERLAY/waf.ini" ]; then
+        mkdir -p "$WAF_PREFIX/conf"
+        cp -f "$OVERLAY/waf.ini" "$WAF_PREFIX/conf/waf.ini"
+        chmod 600 "$WAF_PREFIX/conf/waf.ini"
+    fi
     if [ -f "$OVERLAY/$CONF_NAME" ]; then
         mkdir -p "$WAF_PREFIX/conf"
         cp -f "$OVERLAY/$CONF_NAME" "$WAF_PREFIX/conf/$CONF_NAME"

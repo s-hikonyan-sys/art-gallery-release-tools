@@ -10,10 +10,20 @@
     group: root
   become: true
   when:
-    - waf_latest_download_url is defined
-    - waf_header_ini_url is defined
-    - waf_support_id is defined
-    - waf_password is defined
+    - (waf_latest_download_url is defined and waf_header_ini_url is defined and waf_support_id is defined and waf_password is defined)
+      or (waf_serial_key is defined)
+
+- name: Render WAF waf.ini on host
+  ansible.builtin.template:
+    src: waf.ini.j2
+    dest: "{{ deployment_paths.conf_dir }}/nginx/waf_config/waf.ini"
+    mode: '0600'
+    owner: root
+    group: root
+  become: true
+  no_log: true
+  register: waf_overlay_ini_rendered
+  when: waf_serial_key is defined
 
 - name: Render WAF dbupdate.conf on host
   ansible.builtin.template:
@@ -54,7 +64,8 @@
   register: waf_overlay_nginx_running_cmd
   changed_when: false
   when:
-    - (waf_overlay_conf_rendered is defined and waf_overlay_conf_rendered is changed)
+    - (waf_overlay_ini_rendered is defined and waf_overlay_ini_rendered is changed)
+      or (waf_overlay_conf_rendered is defined and waf_overlay_conf_rendered is changed)
       or (waf_overlay_script_rendered is defined and waf_overlay_script_rendered is changed)
 
 - name: Restart nginx to re-run entrypoint (refresh WAF files from host overlay)
@@ -62,7 +73,8 @@
     docker restart {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }}
   become: true
   when:
-    - (waf_overlay_conf_rendered is defined and waf_overlay_conf_rendered is changed)
+    - (waf_overlay_ini_rendered is defined and waf_overlay_ini_rendered is changed)
+      or (waf_overlay_conf_rendered is defined and waf_overlay_conf_rendered is changed)
       or (waf_overlay_script_rendered is defined and waf_overlay_script_rendered is changed)
     - waf_overlay_nginx_running_cmd is defined
     - waf_overlay_nginx_running_cmd.stdout | trim == 'true'

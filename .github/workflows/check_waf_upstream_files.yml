@@ -1,5 +1,5 @@
-# nginx-base イメージに同梱されている素の dbupdate.conf / dbupdate_waf が変わったかを md5 で検知し、
-# 差分があれば Issue を作成する（release-tools の dbupdate*.j2 を手動で追随するため）。
+# nginx-base イメージに同梱されている素の dbupdate.conf / dbupdate_waf / siteguardlite.ini が変わったかを md5 で検知し、
+# 差分があれば Issue を作成する（release-tools のテンプレを手動で追随するため）。
 #
 # GHCR: nginx-base は Private のため docker pull には PAT が必要（build_nginx.yml と同じ）。
 name: Check WAF upstream files (nginx-base)
@@ -40,8 +40,11 @@ jobs:
             /opt/jp-secure/siteguardlite/conf/dbupdate.conf > /tmp/dbupdate.conf.upstream
           docker run --rm --entrypoint cat "$IMG" \
             /opt/jp-secure/siteguardlite/dbupdate_waf > /tmp/dbupdate_waf.upstream
+          docker run --rm --entrypoint cat "$IMG" \
+            /opt/jp-secure/siteguardlite/conf/siteguardlite.ini > /tmp/siteguardlite.ini.upstream
           echo "conf_hash=$(md5sum /tmp/dbupdate.conf.upstream | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "waf_hash=$(md5sum /tmp/dbupdate_waf.upstream | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "ini_hash=$(md5sum /tmp/siteguardlite.ini.upstream | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: Read baseline hashes from repo
         id: baseline
@@ -51,6 +54,7 @@ jobs:
           get() { grep "^$1=" "$HASH_FILE" | cut -d= -f2- || true; }
           echo "conf_hash=$(get DBUPDATE_CONF_HASH)" >> "$GITHUB_OUTPUT"
           echo "waf_hash=$(get DBUPDATE_WAF_HASH)" >> "$GITHUB_OUTPUT"
+          echo "ini_hash=$(get SITEGUARDLITE_INI_HASH)" >> "$GITHUB_OUTPUT"
 
       - name: Job summary (upstream md5 and baseline hint)
         run: |
@@ -62,6 +66,7 @@ jobs:
             echo "|------|--------------|"
             echo "| dbupdate.conf | \`${{ steps.upstream.outputs.conf_hash }}\` |"
             echo "| dbupdate_waf | \`${{ steps.upstream.outputs.waf_hash }}\` |"
+            echo "| siteguardlite.ini | \`${{ steps.upstream.outputs.ini_hash }}\` |"
             echo ""
             echo "### ベースライン (\`ansible/roles/nginx/files/waf_original_hashes.txt\`)"
             echo ""
@@ -69,27 +74,28 @@ jobs:
             echo "|-----|------|"
             echo "| DBUPDATE_CONF_HASH | \`${{ steps.baseline.outputs.conf_hash }}\` |"
             echo "| DBUPDATE_WAF_HASH | \`${{ steps.baseline.outputs.waf_hash }}\` |"
+            echo "| SITEGUARDLITE_INI_HASH | \`${{ steps.baseline.outputs.ini_hash }}\` |"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
           BC="${{ steps.baseline.outputs.conf_hash }}"
           BW="${{ steps.baseline.outputs.waf_hash }}"
-          if [ -z "$BC" ] && [ -z "$BW" ]; then
+          BI="${{ steps.baseline.outputs.ini_hash }}"
+          if [ -z "$BC" ] && [ -z "$BW" ] && [ -z "$BI" ]; then
             {
               echo "**初回:** ベースラインが未設定のため Issue は作成しません。上記 Upstream md5 を \`waf_original_hashes.txt\` に記入してコミットしてください。"
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # ベースラインが空のときは常に「不一致」になるため Issue を作らない。
-      # いずれかのキーが設定されていて、その md5 だけ上流と違う場合に通知する。
       - name: Open issue if upstream changed
         if: >-
           (steps.baseline.outputs.conf_hash != '' && steps.baseline.outputs.conf_hash != steps.upstream.outputs.conf_hash) ||
-          (steps.baseline.outputs.waf_hash != '' && steps.baseline.outputs.waf_hash != steps.upstream.outputs.waf_hash)
+          (steps.baseline.outputs.waf_hash != '' && steps.baseline.outputs.waf_hash != steps.upstream.outputs.waf_hash) ||
+          (steps.baseline.outputs.ini_hash != '' && steps.baseline.outputs.ini_hash != steps.upstream.outputs.ini_hash)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TITLE="[WAF] nginx-base:${{ github.event.inputs.nginx_base_tag }} の dbupdate / dbupdate_waf がベースラインと不一致"
+          TITLE="[WAF] nginx-base:${{ github.event.inputs.nginx_base_tag }} のベンダーファイルがベースラインと不一致"
           BODY="$(cat <<EOF
           nginx-base イメージ内ファイルの md5 が \`ansible/roles/nginx/files/waf_original_hashes.txt\` と一致しません。
           WAF バージョンアップ等でベンダー差分が入った可能性があります。
@@ -98,8 +104,9 @@ jobs:
           |----------|--------------|----------|
           | dbupdate.conf | \`${{ steps.baseline.outputs.conf_hash }}\` | \`${{ steps.upstream.outputs.conf_hash }}\` |
           | dbupdate_waf | \`${{ steps.baseline.outputs.waf_hash }}\` | \`${{ steps.upstream.outputs.waf_hash }}\` |
+          | siteguardlite.ini | \`${{ steps.baseline.outputs.ini_hash }}\` | \`${{ steps.upstream.outputs.ini_hash }}\` |
 
-          **対応:** \`ansible/roles/nginx/templates/dbupdate.conf.j2\` / \`dbupdate_waf.j2\` を新しい内容に合わせて更新し、検証後に \`waf_original_hashes.txt\` を新しい md5 で更新してコミットしてください。
+          **対応:** 該当する \`ansible/roles/nginx/templates/*.j2\`（\`waf.ini.j2\` / \`dbupdate.conf.j2\` / \`dbupdate_waf.j2\` 等）を新しい内容に合わせて更新し、検証後に \`waf_original_hashes.txt\` を新しい md5 で更新してコミットしてください。
 
           <details><summary>dbupdate.conf 先頭 40 行（upstream）</summary>
 

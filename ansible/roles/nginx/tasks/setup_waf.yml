@@ -33,37 +33,22 @@
     - nginx
     - setup-waf
 
-- name: Require WAF URL facts and credentials for overlay push
+- name: Require WAF URL facts, credentials, and serial for overlay
   ansible.builtin.assert:
     that:
       - waf_latest_download_url is defined
       - waf_header_ini_url is defined
       - waf_support_id is defined
       - waf_password is defined
+      - waf_serial_key is defined
     fail_msg: >-
-      WAF の Secrets（WAF_UPDATE_* / WAF_SUPPORT_ID / WAF_PASSWORD）が extra-vars に必要です。
+      WAF の Secrets（WAF_UPDATE_* / WAF_SUPPORT_ID / WAF_PASSWORD / WAF_SERIAL_KEY）が extra-vars に必要です。
   tags:
     - nginx
     - setup-waf
 
 - name: Render WAF overlay on host (compose mount + entrypoint)
   ansible.builtin.include_tasks: waf_render_overlay_files.yml
-  tags:
-    - nginx
-    - setup-waf
-
-- name: Set WAF license serial key
-  ansible.builtin.shell: |
-    docker exec {{ container_names.nginx }} \
-      /bin/sh -c "
-        CONF='{{ waf_conf_container_path }}/{{ waf_main_conf_filename }}'
-        if grep -q '^serial=' \"\$CONF\"; then
-          sed -i 's|^serial=.*|serial={{ waf_serial_key | mandatory }}|' \"\$CONF\"
-        else
-          echo 'serial={{ waf_serial_key | mandatory }}' >> \"\$CONF\"
-        fi
-      "
-  no_log: true
   tags:
     - nginx
     - setup-waf
@@ -107,7 +92,7 @@
   ansible.builtin.debug:
     msg: >-
       WAF 初期設定が完了しました。
-      dbupdate.conf / dbupdate_waf はホストの nginx/waf_config に出力済みです（entrypoint がコンテナ起動時に反映）。
+      waf.ini / dbupdate.conf / dbupdate_waf はホストの nginx/waf_config に出力済みです（entrypoint がコンテナ起動時に反映）。
   tags:
     - nginx
     - setup-waf
