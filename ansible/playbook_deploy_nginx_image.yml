@@ -1,7 +1,7 @@
 ---
 # Nginx: イメージ Pull とコンテナ再作成のみ
 # CI では playbook_deploy_nginx_compose.yml の後に実行すること
-# 前提: ホスト上に frontend 成果物と nginx.conf が存在すること（未配置なら失敗）
+# 未配置時は警告のみ（デプロイは続行）。nginx.conf 未配置だとコンテナ起動に失敗しやすい。
 
 - name: Deploy Nginx container image
   hosts: "{{ target_hosts }}"
@@ -20,18 +20,18 @@
             path: "{{ deployment_paths.conf_dir }}/nginx/nginx.conf"
           register: nginx_prereq_conf
 
-        - name: Fail if frontend dist is missing
-          ansible.builtin.fail:
+        - name: Warn if frontend dist is missing
+          ansible.builtin.debug:
             msg: >-
-              Frontendの成果物が見つかりません: {{ deployment_paths.dist_dir }}/frontend/index.html
-              先に Frontend をデプロイしてください（Deploy Frontend ワークフロー等）。
+              【警告】Frontend の成果物が見つかりません: {{ deployment_paths.dist_dir }}/frontend/index.html
+              デプロイは続行しますが、静的配信は 404 になる可能性があります。
           when: not nginx_prereq_frontend.stat.exists
 
-        - name: Fail if nginx config is missing
-          ansible.builtin.fail:
+        - name: Warn if nginx config is missing
+          ansible.builtin.debug:
             msg: >-
-              Nginx の設定ファイルが見つかりません: {{ deployment_paths.conf_dir }}/nginx/nginx.conf
-              先に Nginx 設定デプロイ（run_deploy_code）を実行してください。
+              【重要】Nginx の設定ファイルが見つかりません: {{ deployment_paths.conf_dir }}/nginx/nginx.conf
+              このまま続行すると Nginx コンテナの起動に失敗する可能性が高いです。
           when: not nginx_prereq_conf.stat.exists
 
     - name: Update nginx container image (pull + recreate)

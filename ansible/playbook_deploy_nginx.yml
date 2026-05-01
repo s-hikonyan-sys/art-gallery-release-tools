@@ -30,17 +30,18 @@
             path: "{{ deployment_paths.conf_dir }}/nginx/nginx.conf"
           register: nginx_prereq_conf
 
-        - name: Fail if frontend dist is missing
-          ansible.builtin.fail:
+        - name: Warn if frontend dist is missing
+          ansible.builtin.debug:
             msg: >-
-              Frontendの成果物が見つかりません: {{ deployment_paths.dist_dir }}/frontend/index.html
-              先に Frontend をデプロイしてください。
+              【警告】Frontend の成果物が見つかりません: {{ deployment_paths.dist_dir }}/frontend/index.html
+              デプロイは続行しますが、静的配信は 404 になる可能性があります。
           when: not nginx_prereq_frontend.stat.exists
 
-        - name: Fail if nginx config is missing
-          ansible.builtin.fail:
+        - name: Warn if nginx config is missing
+          ansible.builtin.debug:
             msg: >-
-              Nginx の設定ファイルが見つかりません: {{ deployment_paths.conf_dir }}/nginx/nginx.conf
+              【重要】Nginx の設定ファイルが見つかりません: {{ deployment_paths.conf_dir }}/nginx/nginx.conf
+              このまま続行すると Nginx コンテナの起動に失敗する可能性が高いです。
           when: not nginx_prereq_conf.stat.exists
 
     - name: Update nginx container image (pull + recreate)
