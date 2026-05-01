@@ -1,0 +1,8 @@
+---
+# バックエンド検証のみ（コンテナ起動・再起動の後に実行する）
+
+- name: Include verify tasks
+  ansible.builtin.include_tasks: verify.yml
+  tags:
+    - backend
+    - verify

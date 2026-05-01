@@ -1,21 +1,14 @@
 ---
-# バックエンド: イメージ更新のみ（compose 反映 + Pull & 再作成）
-# コード・設定の同期は playbook_deploy_backend_code.yml を使用
+# バックエンド: イメージ更新（Pull & コンテナ再作成）のみ
+# CI では playbook_deploy_backend_compose.yml の後に実行すること
+# 手動実行時は compose 未反映の場合、先に playbook_deploy_backend_compose.yml を実行する
 
-- name: Deploy Backend Image (compose + container update)
+- name: Deploy Backend Image (container update)
   hosts: "{{ target_hosts }}"
   become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
 
   tasks:
-    - name: Deploy docker-compose.yml
-      ansible.builtin.include_role:
-        name: docker
-        tasks_from: deploy_compose
-      tags:
-        - docker
-        - deploy-compose
-
-    - name: Update backend container only (pull and restart)
+    - name: Update backend container only (pull and recreate)
       ansible.builtin.include_role:
         name: docker
         tasks_from: container/update/update_backend_image

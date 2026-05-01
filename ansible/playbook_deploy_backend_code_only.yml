@@ -1,0 +1,15 @@
+---
+# バックエンド: コード・設定の反映のみ（検証・コンテナ操作なし）
+# CI: compose の後、イメージ更新または再起動の前に実行する
+
+- name: Deploy Backend Code Only
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Deploy backend source and config
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: deploy_only
+      tags:
+        - deploy-backend

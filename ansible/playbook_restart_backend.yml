@@ -1,0 +1,15 @@
+---
+# バックエンド: コンテナ再起動のみ（コードのみ更新したときなど）
+
+- name: Restart Backend Container
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Restart backend container only
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: container/restart/restart_backend
+      tags:
+        - docker
+        - restart-backend

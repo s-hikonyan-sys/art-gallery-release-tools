@@ -1,0 +1,17 @@
+---
+# バックエンド: docker-compose.yml の生成・サーバー反映のみ
+# GitHub Actions では他プレイブックより先に実行し、以降の手順で順序を制御する
+
+- name: Deploy Backend docker-compose.yml
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Deploy docker-compose.yml
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: deploy_compose
+      tags:
+        - docker
+        - deploy-compose
+        - deploy-backend

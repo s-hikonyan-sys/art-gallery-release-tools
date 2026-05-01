@@ -1,8 +1,7 @@
 ---
-# バックエンド: イメージ + コードを一括デプロイ（GitHub Actions で両方 true のとき）
-# 実行順: compose → コード/設定 → イメージ更新 → 再起動
-# 単用途: playbook_deploy_backend_image.yml / playbook_deploy_backend_code.yml
-# 実装物（app.py等）はボリュームマウントで提供され、イメージには含まれません
+# バックエンド: イメージ + コードを一括デプロイ（手動・単一プレイブック向け）
+# 実行順: compose → コード/設定 → イメージ更新（再作成）→ 検証
+# CI では deploy_backend ワークフローが複数プレイブックで同じ順序を保証する
 
 - name: Deploy Backend Application
   hosts: "{{ target_hosts }}"
@@ -21,6 +20,7 @@
     - name: Deploy backend (source and config)
       ansible.builtin.include_role:
         name: backend
+        tasks_from: deploy_only
       tags:
         - deploy-backend
 
@@ -32,10 +32,10 @@
         - docker
         - update-backend-image
 
-    - name: Restart backend container only
+    - name: Verify backend
       ansible.builtin.include_role:
-        name: docker
-        tasks_from: container/restart/restart_backend
+        name: backend
+        tasks_from: verify_only
       tags:
-        - docker
-        - restart-backend
+        - verify
+        - backend

@@ -1,5 +1,6 @@
 ---
-# バックエンド: コード・設定の反映とコンテナ再起動のみ
+# バックエンド: コード・設定の反映と再起動・検証（手動向けの一括プレイブック）
+# compose 反映 → コード同期 → 再起動 → 検証
 # イメージの Pull/再作成は playbook_deploy_backend_image.yml を使用
 
 - name: Deploy Backend Code and Config
@@ -7,9 +8,18 @@
   become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
 
   tasks:
+    - name: Deploy docker-compose.yml
+      ansible.builtin.include_role:
+        name: docker
+        tasks_from: deploy_compose
+      tags:
+        - docker
+        - deploy-compose
+
     - name: Deploy backend (source and config)
       ansible.builtin.include_role:
         name: backend
+        tasks_from: deploy_only
       tags:
         - deploy-backend
 
@@ -20,3 +30,11 @@
       tags:
         - docker
         - restart-backend
+
+    - name: Verify backend
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: verify_only
+      tags:
+        - verify
+        - backend

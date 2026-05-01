@@ -164,18 +164,26 @@ jobs:
 
       - name: Deploy Backend Application
         run: |
-          set -e
+          set -euo pipefail
           cd ansible
           IMG="${{ github.event.inputs.run_deploy_image }}"
           CODE="${{ github.event.inputs.run_deploy_code }}"
           INV=(--inventory inventory/production.yml --extra-vars "@/tmp/ansible_vars.json")
-          if [ "$IMG" == "true" ] && [ "$CODE" == "true" ]; then
-            ansible-playbook playbook_deploy_backend.yml "${INV[@]}"
-          elif [ "$IMG" == "true" ]; then
-            ansible-playbook playbook_deploy_backend_image.yml "${INV[@]}"
-          else
-            ansible-playbook playbook_deploy_backend_code.yml "${INV[@]}"
+
+          # ワークフロー主導: compose → コード → イメージ更新 or 再起動 → 検証
+          ansible-playbook playbook_deploy_backend_compose.yml "${INV[@]}"
+
+          if [ "$CODE" = "true" ]; then
+            ansible-playbook playbook_deploy_backend_code_only.yml "${INV[@]}"
           fi
+
+          if [ "$IMG" = "true" ]; then
+            ansible-playbook playbook_deploy_backend_image.yml "${INV[@]}"
+          elif [ "$CODE" = "true" ]; then
+            ansible-playbook playbook_restart_backend.yml "${INV[@]}"
+          fi
+
+          ansible-playbook playbook_verify_backend.yml "${INV[@]}"
 
       - name: Remove sensitive files
         if: always()
