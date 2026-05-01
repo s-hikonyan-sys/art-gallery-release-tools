@@ -10,6 +10,8 @@
 #                 waf_main_conf_filename, waf_update_conf_filename,
 #                 waf_update_base_url, waf_update_path_suffix（LATEST_URL 用・GitHub Secrets）
 #
+# dbupdate.conf: dbupdate_waf は perl で sig_download_user / sig_download_pass を読む（SUPPORT_ID 系は未使用）
+#
 # 実行方法（手動）:
 #   ansible-playbook playbook_setup_waf.yml \
 #     --extra-vars "waf_serial_key=XXX waf_support_id=XXX waf_password=XXX"
@@ -83,22 +85,26 @@
     - nginx
     - setup-waf
 
-- name: Set WAF support credentials for signature updates
+# GitHub Secrets の WAF_SUPPORT_ID / WAF_PASSWORD を、スクリプトが参照するキー名で書く
+- name: Set WAF signature download credentials for dbupdate_waf
   ansible.builtin.shell: |
-    docker exec {{ container_names.nginx }} \
-      /bin/sh -c "
-        CONF='{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}'
-        if grep -q '^SUPPORT_ID=' \"\$CONF\"; then
-          sed -i 's|^SUPPORT_ID=.*|SUPPORT_ID={{ waf_support_id | mandatory }}|' \"\$CONF\"
+    docker exec \
+      -e SIG_U={{ waf_support_id | mandatory | quote }} \
+      -e SIG_P={{ waf_password | mandatory | quote }} \
+      {{ container_names.nginx }} \
+      /bin/sh -c '
+        CONF="{{ waf_conf_container_path }}/{{ waf_update_conf_filename }}"
+        if grep -q "^sig_download_user=" "$CONF" 2>/dev/null; then
+          sed -i "s|^sig_download_user=.*|sig_download_user=${SIG_U}|" "$CONF"
         else
-          echo 'SUPPORT_ID={{ waf_support_id | mandatory }}' >> \"\$CONF\"
+          echo "sig_download_user=${SIG_U}" >> "$CONF"
         fi
-        if grep -q '^SUPPORT_PASSWORD=' \"\$CONF\"; then
-          sed -i 's|^SUPPORT_PASSWORD=.*|SUPPORT_PASSWORD={{ waf_password | mandatory }}|' \"\$CONF\"
+        if grep -q "^sig_download_pass=" "$CONF" 2>/dev/null; then
+          sed -i "s|^sig_download_pass=.*|sig_download_pass=${SIG_P}|" "$CONF"
         else
-          echo 'SUPPORT_PASSWORD={{ waf_password | mandatory }}' >> \"\$CONF\"
+          echo "sig_download_pass=${SIG_P}" >> "$CONF"
         fi
-      "
+      '
   no_log: true
   tags:
     - nginx
@@ -128,8 +134,9 @@
 # Makefile に update ターゲットは無い。シグネチャ更新は ./dbupdate_waf。
 - name: Run initial WAF signature update
   ansible.builtin.shell: |
-    docker exec {{ container_names.nginx }} \
-      /bin/sh -c "set -e && cd {{ waf_install_dir | mandatory | quote }} && ./dbupdate_waf"
+    docker exec -w {{ waf_install_dir | mandatory | quote }} \
+      {{ container_names.nginx }} \
+      ./dbupdate_waf
   register: waf_update
   changed_when: waf_update.rc == 0
   tags:

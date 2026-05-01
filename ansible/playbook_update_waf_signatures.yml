@@ -9,8 +9,9 @@
   tasks:
     - name: Update WAF signatures
       ansible.builtin.shell: |
-        docker exec {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} \
-          /bin/sh -c "set -e && cd {{ waf_install_dir | mandatory('waf_install_dir must be set via extra-vars') | quote }} && ./dbupdate_waf"
+        docker exec -w {{ waf_install_dir | mandatory('waf_install_dir must be set via extra-vars') | quote }} \
+          {{ container_names.nginx | mandatory('container_names.nginx must be set in inventory') }} \
+          ./dbupdate_waf
       register: waf_sig_update_result
       changed_when: waf_sig_update_result.rc == 0
       tags:
