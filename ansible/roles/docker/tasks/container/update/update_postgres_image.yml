@@ -26,9 +26,10 @@
       - "postgres"
     pull: always
     recreate: always
+  # GHCR 認証は app_user の ~/.docker（0700）。デプロイ SSH ユーザーと異なる場合は root で読む。
   environment:
-    DOCKER_CONFIG: "/home/{{ ansible_user }}/.docker"
-  become: no  
+    DOCKER_CONFIG: "/home/{{ app_user }}/.docker"
+  become: yes
   tags:    
     - docker
     - update-postgres-image
