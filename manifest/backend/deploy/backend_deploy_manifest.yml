@@ -6,4 +6,12 @@
 # ref_commit_sha: コード側のコミット（manifest/backend/code/backend_code_manifest.yml または git ls-remote）
 # image_source_sha: イメージビルド時のソースコミット（manifest/backend/image/backend_version_manifest.yml）
 
-backend_deployments: []
+backend_deployments:
+  - timestamp: "2026-05-01T12:13:33Z"
+    deploy_type: both
+    release_version: 1.0.0
+    code_version: null
+    backend_ref: main
+    ref_commit_sha: 4816aaa74c3262e39aa3caf2e4ae967b697bcb80
+    image_source_sha: 4816aaa74c3262e39aa3caf2e4ae967b697bcb80
+    workflow_run_url: https://github.com/s-hikonyan-sys/art-gallery-release-tools/actions/runs/25213786638
