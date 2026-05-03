@@ -92,7 +92,7 @@
   ansible.builtin.debug:
     msg: >-
       WAF 初期設定が完了しました。
-      waf.ini / dbupdate.conf / dbupdate_waf はホストの nginx/waf_config に出力済みです（entrypoint がコンテナ起動時に反映）。
+      siteguardlite.ini / dbupdate.conf / dbupdate_waf はホストの nginx/waf_config に出力済みです（entrypoint がコンテナ起動時に反映）。
   tags:
     - nginx
     - setup-waf

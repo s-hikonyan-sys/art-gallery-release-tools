@@ -68,7 +68,8 @@ docker_volume_waf_logs: "{{ app_name }}_waf_logs"
 waf_install_dir: "/opt/jp-secure/siteguardlite"
 waf_conf_container_path: "/opt/jp-secure/siteguardlite/conf"
 waf_data_container_path: "/opt/jp-secure/siteguardlite/databases_waf"
-waf_main_conf_filename: "waf.ini"
+# Nginx SiteGuard モジュールが読むファイル名（実体は siteguardlite.ini）
+waf_main_conf_filename: "siteguardlite.ini"
 waf_update_conf_filename: "dbupdate.conf"
 # 2GB VPS 等: 管理画面はデフォルト off（waf_admin_service で上書き可）
 waf_admin_service: "no"

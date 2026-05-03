@@ -13,10 +13,10 @@
     - (waf_latest_download_url is defined and waf_header_ini_url is defined and waf_support_id is defined and waf_password is defined)
       or (waf_serial_key is defined)
 
-- name: Render WAF waf.ini on host
+- name: Render WAF siteguardlite.ini on host
   ansible.builtin.template:
-    src: waf.ini.j2
-    dest: "{{ deployment_paths.conf_dir }}/nginx/waf_config/waf.ini"
+    src: siteguardlite.ini.j2
+    dest: "{{ deployment_paths.conf_dir }}/nginx/waf_config/{{ waf_main_conf_filename | mandatory('waf_main_conf_filename must be set (e.g. siteguardlite.ini)') }}"
     mode: '0600'
     owner: root
     group: root

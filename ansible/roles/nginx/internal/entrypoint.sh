@@ -20,12 +20,14 @@ fi
 WAF_PREFIX="/opt/jp-secure/siteguardlite"
 OVERLAY="${WAF_HOST_OVERLAY_DIR:-/tmp/host_waf_config}"
 CONF_NAME="${WAF_DBUPDATE_CONF_NAME:-dbupdate.conf}"
+# Nginx モジュールが読む本体は siteguardlite.ini（waf.ini はエイリアス用シンボリックリンク）
+MAIN_INI="${WAF_MAIN_CONF_NAME:-siteguardlite.ini}"
 
 if [ -d "$OVERLAY" ]; then
-    if [ -f "$OVERLAY/waf.ini" ]; then
+    if [ -f "$OVERLAY/$MAIN_INI" ]; then
         mkdir -p "$WAF_PREFIX/conf"
-        cp -f "$OVERLAY/waf.ini" "$WAF_PREFIX/conf/waf.ini"
-        chmod 600 "$WAF_PREFIX/conf/waf.ini"
+        cp -f "$OVERLAY/$MAIN_INI" "$WAF_PREFIX/conf/$MAIN_INI"
+        chmod 600 "$WAF_PREFIX/conf/$MAIN_INI"
     fi
     if [ -f "$OVERLAY/$CONF_NAME" ]; then
         mkdir -p "$WAF_PREFIX/conf"

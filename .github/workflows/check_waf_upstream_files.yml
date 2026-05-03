@@ -106,7 +106,7 @@ jobs:
           | dbupdate_waf | \`${{ steps.baseline.outputs.waf_hash }}\` | \`${{ steps.upstream.outputs.waf_hash }}\` |
           | siteguardlite.ini | \`${{ steps.baseline.outputs.ini_hash }}\` | \`${{ steps.upstream.outputs.ini_hash }}\` |
 
-          **対応:** 該当する \`ansible/roles/nginx/templates/*.j2\`（\`waf.ini.j2\` / \`dbupdate.conf.j2\` / \`dbupdate_waf.j2\` 等）を新しい内容に合わせて更新し、検証後に \`waf_original_hashes.txt\` を新しい md5 で更新してコミットしてください。
+          **対応:** 該当する \`ansible/roles/nginx/templates/*.j2\`（\`siteguardlite.ini.j2\` / \`dbupdate.conf.j2\` / \`dbupdate_waf.j2\` 等）を新しい内容に合わせて更新し、検証後に \`waf_original_hashes.txt\` を新しい md5 で更新してコミットしてください。
 
           <details><summary>dbupdate.conf 先頭 40 行（upstream）</summary>
 
