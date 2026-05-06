@@ -47,3 +47,11 @@ nginx_deployments:
     ref_commit_sha: null
     image_source_sha: 1a60ff390db00acd7a3ee9bfae1eb9e793df2069
     workflow_run_url: https://github.com/s-hikonyan-sys/art-gallery-release-tools/actions/runs/25415206374
+  - timestamp: "2026-05-06T04:10:45Z"
+    deploy_type: code
+    release_version: 1.0.0
+    code_version: null
+    nginx_ref: main
+    ref_commit_sha: 6696f2012636de1062a548364a48edd017eeba8d
+    image_source_sha: null
+    workflow_run_url: https://github.com/s-hikonyan-sys/art-gallery-release-tools/actions/runs/25415916299
