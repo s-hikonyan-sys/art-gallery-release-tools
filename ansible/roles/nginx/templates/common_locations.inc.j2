@@ -48,8 +48,20 @@ location /api {
     proxy_read_timeout 60s;
 }
 
+# トップは常に SPA
+location = / {
+    try_files /index.html =404;
+}
+
+# Vue Router（history）で定義しているパスのみ index.html へフォールバック
+# フロントの routes を増やしたらここも追記すること（未定義パスは 404）
+location ~* ^/(gallery|about|contact|artwork)(/|$) {
+    try_files $uri /index.html;
+}
+
+# 上記以外は実ファイルがなければ 404（/aaa 等が SPA にならない）
 location / {
-    try_files $uri $uri/ /index.html;
+    try_files $uri $uri/ =404;
 }
 
 location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot)$ {
