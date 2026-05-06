@@ -1,0 +1,57 @@
+name: Deploy Portfolio
+
+on:
+  workflow_dispatch:
+    inputs:
+      portfolio_git_ref:
+        description: 'デプロイするポートフォリオリポジトリの ref (branch / tag / sha)'
+        required: false
+        default: 'main'
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout art-gallery-release-tools repository
+        uses: actions/checkout@v4
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Setup SSH for Production Deployment
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/ansible_deploy_key
+          chmod 600 ~/.ssh/ansible_deploy_key
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Write Ansible extra-vars file
+        run: |
+          cat > /tmp/ansible_vars.json << 'VARS_EOF'
+          {
+            "target_hosts": "production",
+            "prod_host": "${{ vars.PROD_HOST }}",
+            "prod_ssh_user": "${{ vars.PROD_SSH_USER }}",
+            "prod_ssh_key_path": "~/.ssh/ansible_deploy_key",
+            "portfolio_git_ref": "${{ github.event.inputs.portfolio_git_ref }}",
+            "github_token_portfolio": "${{ secrets.GH_TOKEN_PORTFOLIO }}"
+          }
+          VARS_EOF
+          chmod 600 /tmp/ansible_vars.json
+
+      - name: Deploy portfolio (Ansible)
+        run: |
+          set -euo pipefail
+          cd ansible
+          ansible-playbook playbook_deploy_portfolio.yml \
+            --inventory inventory/production.yml \
+            --extra-vars "@/tmp/ansible_vars.json"
+
+      - name: Remove sensitive files
+        if: always()
+        run: rm -f /tmp/ansible_vars.json

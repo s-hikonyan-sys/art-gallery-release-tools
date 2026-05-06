@@ -11,6 +11,8 @@ service_repo_names:
   nginx: "art-gallery-nginx"
   frontend: "art-gallery-frontend"
   secrets: "art-gallery-secrets"
+  # 公開用ポートフォリオ静的サイト（nara-sketch.com/portfolio/...）
+  portfolio: "portfolio"
 
 # Dockerイメージのベースバージョン管理
 # node は Frontend ビルドを CI 側で実施するため管理対象外

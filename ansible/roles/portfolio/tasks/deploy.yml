@@ -1,0 +1,36 @@
+---
+# ポートフォリオ用静的サイト（公開 Git リポジトリ）を dist/portfolio に配置
+# コンテナは ./dist/portfolio を /usr/share/nginx/html/portfolio にマウントしているため
+# ファイル更新のみで反映され、nginx reload は不要
+
+- name: Ensure portfolio dist directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.dist_dir }}/portfolio"
+    state: directory
+    mode: '0755'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - portfolio
+    - deploy-portfolio
+
+- name: Pull portfolio static site from GitHub
+  ansible.builtin.shell: |
+    set -e
+    DEST="{{ deployment_paths.dist_dir }}/portfolio"
+    REPO_URL="https://github.com/{{ portfolio_github_owner | default(github_owner) }}/{{ portfolio_github_repo | default(service_repo_names.portfolio) }}.git"
+    TOKEN_REWRITE="url.https://x-access-token:{{ github_token_portfolio | mandatory('github_token_portfolio must be set') }}@github.com/.insteadOf=https://github.com/"
+
+    if [ -d "${DEST}/.git" ]; then
+      git -C "${DEST}" -c "${TOKEN_REWRITE}" fetch --depth 1 origin "{{ portfolio_git_ref | default('main') }}"
+      git -C "${DEST}" reset --hard FETCH_HEAD
+    else
+      git -c "${TOKEN_REWRITE}" clone --depth 1 --branch "{{ portfolio_git_ref | default('main') }}" \
+        "${REPO_URL}" "${DEST}"
+    fi
+  no_log: true
+  become: true
+  become_user: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - portfolio
+    - deploy-portfolio

@@ -1,0 +1,14 @@
+---
+# ポートフォリオ静的サイト: Git から dist/portfolio へ取得のみ（nginx reload なし）
+
+- name: Deploy portfolio static files
+  hosts: "{{ target_hosts }}"
+  become: "{{ ansible_become | mandatory('ansible_become must be set in inventory') }}"
+
+  tasks:
+    - name: Deploy portfolio (git pull to dist/portfolio)
+      ansible.builtin.include_role:
+        name: portfolio
+        tasks_from: deploy
+      tags:
+        - deploy-portfolio
