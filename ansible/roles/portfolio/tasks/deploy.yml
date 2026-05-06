@@ -1,6 +1,6 @@
 ---
 # ポートフォリオ用静的サイト（公開 Git リポジトリ）を dist/portfolio に配置
-# コンテナは ./dist/portfolio を /usr/share/nginx/html/portfolio にマウントしているため
+# コンテナは ./dist/portfolio を /usr/share/nginx/portfolio にマウントしているため
 # ファイル更新のみで反映され、nginx reload は不要
 
 - name: Ensure portfolio dist directory exists
