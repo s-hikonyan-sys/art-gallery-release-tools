@@ -7,6 +7,6 @@ nginx_code:
   1.0.0:
     source_ref: main
     source_sha: 6696f2012636de1062a548364a48edd017eeba8d
-    registered_by_run_id: "25205513714"
+    registered_by_run_id: "25730662006"
     registered_by_workflow: Register Nginx Code Version
     registered_at_utc: ""
