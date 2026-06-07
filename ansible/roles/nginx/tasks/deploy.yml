@@ -14,7 +14,20 @@
     - "{{ deployment_paths.conf_dir }}/nginx"
     - "{{ deployment_paths.conf_dir }}/nginx/conf.d"
     - "{{ deployment_paths.src_dir }}/{{ service_repo_names.nginx }}"
-    - "{{ deployment_paths.logs_dir }}/nginx"
+  tags:
+    - nginx
+    - deploy-nginx
+    - deploy-all
+
+# nginx コンテナは root 起動のためログファイル UID はコンテナ内 nginx ユーザーになる。
+# ディレクトリは artgallery 所有 + setgid で artgallery が管理可能にする。
+- name: Ensure nginx log directory is group-writable with setgid
+  ansible.builtin.file:
+    path: "{{ deployment_paths.logs_dir }}/nginx"
+    state: directory
+    mode: '2775'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
   tags:
     - nginx
     - deploy-nginx

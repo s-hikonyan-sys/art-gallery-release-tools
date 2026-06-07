@@ -16,6 +16,9 @@ all:
           domain_name: localhost
           deployment_dir: "/tmp/art-gallery-build" # CI環境の作業ディレクトリ
           app_user: "runner" # CI環境でのアプリケーション実行ユーザー
+          # GitHub Actions runner の UID/GID（ubuntu-latest では通常 1001）
+          app_uid: 1001
+          app_gid: 1001
           client_max_body_size: "10M"
 
           # Backend/Nginx 設定

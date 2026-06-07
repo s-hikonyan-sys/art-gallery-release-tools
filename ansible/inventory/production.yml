@@ -16,6 +16,8 @@ all:
           domain_name: nara-sketch.com
           deployment_dir: "/opt/art-gallery"
           app_user: "artgallery"
+          app_uid: 1001
+          app_gid: 1001
           client_max_body_size: "100M"
 
           # Backend/Nginx 設定

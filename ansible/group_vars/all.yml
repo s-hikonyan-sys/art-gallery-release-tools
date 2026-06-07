@@ -3,6 +3,9 @@
 
 # アプリケーション基本情報
 app_name: "art-gallery"
+# ホスト artgallery とコンテナ bind mount 書き込み UID/GID を一致させる（compose user: に使用）
+app_uid: 1001
+app_gid: 1001
 
 # 各サービスのリポジトリ名・イメージ名の一元管理
 service_repo_names:

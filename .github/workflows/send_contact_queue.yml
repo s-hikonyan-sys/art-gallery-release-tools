@@ -6,7 +6,8 @@ name: Send Contact Queue
 #   SLACK_CONTACT_WEBHOOK_URL                   : お問い合わせ Slack 送信先（追加）
 # 利用 Variables:
 #   PROD_HOST, PROD_SSH_USER                    : VPS 接続情報（既存）
-#   CONTACT_QUEUE_PATH                          : キューディレクトリ（例: /app/contact_queue）
+#   CONTACT_QUEUE_PATH                          : キューディレクトリ（ホストパス例: /opt/art-gallery/src/art-gallery-backend/contact_queue）
+#   PROD_APP_USER                               : ファイル操作ユーザー（例: artgallery）
 
 on:
   schedule:
@@ -51,15 +52,27 @@ jobs:
         env:
           SLACK_CONTACT_WEBHOOK_URL: ${{ secrets.SLACK_CONTACT_WEBHOOK_URL }}
           QUEUE_DIR:         /tmp/contact_queue
+          REMOVED_LIST_FILE: /tmp/contact_queue/.removed_files
         run: python scripts/send_contact_queue.py
 
-      - name: Push back processed queue to VPS
+      - name: Remove processed queue files on VPS
         if: always()
+        env:
+          APP_USER: ${{ vars.PROD_APP_USER || 'artgallery' }}
         run: |
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
-            /tmp/contact_queue/ \
-            "${{ vars.PROD_SSH_USER }}@${{ vars.PROD_HOST }}:${{ vars.CONTACT_QUEUE_PATH }}/"
+          REMOVED_LIST="/tmp/contact_queue/.removed_files"
+          if [ ! -f "${REMOVED_LIST}" ]; then
+            echo "[INFO] No removed files list."
+            exit 0
+          fi
+          SSH_OPTS="-i ~/.ssh/deploy_key -o StrictHostKeyChecking=no"
+          REMOTE="${{ vars.PROD_SSH_USER }}@${{ vars.PROD_HOST }}"
+          QUEUE_PATH="${{ vars.CONTACT_QUEUE_PATH }}"
+          while IFS= read -r filename; do
+            [ -z "${filename}" ] && continue
+            ssh ${SSH_OPTS} "${REMOTE}" \
+              "sudo -u ${APP_USER} rm -f '${QUEUE_PATH}/${filename}'"
+          done < "${REMOVED_LIST}"
         continue-on-error: true
 
       - name: Notify on failure

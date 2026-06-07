@@ -26,6 +26,7 @@ import requests
 
 SLACK_CONTACT_WEBHOOK_URL = os.environ.get("SLACK_CONTACT_WEBHOOK_URL", "")
 QUEUE_DIR         = Path(os.environ.get("QUEUE_DIR", "/tmp/contact_queue"))
+REMOVED_LIST_FILE = Path(os.environ.get("REMOVED_LIST_FILE", str(QUEUE_DIR / ".removed_files")))
 MAX_RETRIES       = 5
 TIMEOUT           = 10
 
@@ -92,6 +93,7 @@ def main() -> None:
     print(f"[INFO] Processing {len(files)} queued contact(s).")
     sent_count = 0
     fail_count = 0
+    removed_files: list[str] = []
 
     for path in files:
         try:
@@ -113,6 +115,7 @@ def main() -> None:
 
         if send_to_slack(data):
             path.unlink()
+            removed_files.append(path.name)
             print(f"[OK] Sent and removed: {path.name}")
             sent_count += 1
         else:
@@ -122,6 +125,10 @@ def main() -> None:
             fail_count += 1
 
     print(f"\n[SUMMARY] sent={sent_count}, failed/skipped={fail_count}")
+
+    if removed_files:
+        REMOVED_LIST_FILE.write_text("\n".join(removed_files) + "\n", encoding="utf-8")
+        print(f"[INFO] Wrote removed file list: {REMOVED_LIST_FILE}")
 
     if fail_count > 0:
         sys.exit(1)

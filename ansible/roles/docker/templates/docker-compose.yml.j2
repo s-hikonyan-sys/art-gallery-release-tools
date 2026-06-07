@@ -2,6 +2,7 @@ services:
   secrets-api:
     image: "{{ image_names.secrets | mandatory('image_names.secrets must be set in inventory') }}:{{ resolved_secrets_version }}"
     container_name: "{{ container_names.secrets | mandatory('container_names.secrets must be set in inventory') }}"
+    user: "{{ app_uid | mandatory('app_uid must be set in group_vars') }}:{{ app_gid | mandatory('app_gid must be set in group_vars') }}"
     environment:
       TZ: Asia/Tokyo
     volumes:
@@ -55,6 +56,7 @@ services:
     # 注意: ビルドはAnsibleタスクで一時ディレクトリを使用して実行される
     # ビルドコンテキストはサーバー上に残らない
     container_name: "{{ container_names.backend | mandatory('container_names.backend must be set in inventory') }}"
+    user: "{{ app_uid | mandatory('app_uid must be set in group_vars') }}:{{ app_gid | mandatory('app_gid must be set in group_vars') }}"
     # 環境変数は使用しない。設定ファイル（config.yaml, secrets.yaml.encrypted）で管理    # backendコンテナとsecretsコンテナおよびdatabaseコンテナの関係性は深いが、それらのコンテナとは機能が異なるため、依存関係を削除
     depends_on:
       postgres:

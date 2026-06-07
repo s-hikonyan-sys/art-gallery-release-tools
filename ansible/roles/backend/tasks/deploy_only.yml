@@ -15,6 +15,19 @@
     - deploy-backend
     - deploy-all
 
+- name: Ensure backend contact queue directory exists
+  ansible.builtin.file:
+    path: "{{ deployment_paths.src_dir }}/{{ service_repo_names.backend }}/contact_queue"
+    state: directory
+    mode: '0755'
+    owner: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+    group: "{{ app_user | mandatory('app_user must be set in inventory') }}"
+  tags:
+    - backend
+    - deploy
+    - deploy-backend
+    - deploy-all
+
 - name: Ensure backend config directory exists
   ansible.builtin.file:
     path: "{{ deployment_paths.conf_dir }}/backend/config"
