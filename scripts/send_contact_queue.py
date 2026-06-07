@@ -6,7 +6,7 @@ GitHub Actions から呼び出される（release-tools の send_contact_queue.y
 SSH 経由で VPS から取得して処理する。
 
 環境変数:
-    SLACK_WEBHOOK_URL    : Slack Incoming Webhook URL（release-tools Secrets）
+    SLACK_CONTACT_WEBHOOK_URL : Slack Incoming Webhook URL（お問い合わせ通知用、release-tools Secrets）
     QUEUE_DIR            : キューファイルのローカルパス（rsync後の一時ディレクトリ）
     DEAD_LETTER_DIR      : 最大リトライ超過ファイルの保存先
 
@@ -24,7 +24,7 @@ from pathlib import Path
 
 import requests
 
-SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
+SLACK_CONTACT_WEBHOOK_URL = os.environ.get("SLACK_CONTACT_WEBHOOK_URL", "")
 QUEUE_DIR         = Path(os.environ.get("QUEUE_DIR", "/tmp/contact_queue"))
 MAX_RETRIES       = 5
 TIMEOUT           = 10
@@ -64,7 +64,7 @@ def send_to_slack(contact: dict) -> bool:
     payload = build_slack_payload(contact)
     try:
         resp = requests.post(
-            SLACK_WEBHOOK_URL,
+            SLACK_CONTACT_WEBHOOK_URL,
             json=payload,
             timeout=TIMEOUT,
             headers={"Content-Type": "application/json"},
@@ -76,8 +76,8 @@ def send_to_slack(contact: dict) -> bool:
 
 
 def main() -> None:
-    if not SLACK_WEBHOOK_URL:
-        print("[ERROR] SLACK_WEBHOOK_URL is not set.", file=sys.stderr)
+    if not SLACK_CONTACT_WEBHOOK_URL:
+        print("[ERROR] SLACK_CONTACT_WEBHOOK_URL is not set.", file=sys.stderr)
         sys.exit(1)
 
     if not QUEUE_DIR.exists():
