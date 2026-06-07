@@ -37,6 +37,14 @@ location ^~ /portfolio/ {
     index index.html;
 }
 
+# SNSフィードJSON（GitHub Actions が定期配置）
+location ^~ /social/ {
+    alias /var/www/social/;
+    add_header Access-Control-Allow-Origin *;
+    add_header Cache-Control "public, max-age=3600";
+    access_log off;
+}
+
 location /api {
     proxy_pass http://backend_server;
     proxy_http_version 1.1;
@@ -53,10 +61,16 @@ location /api {
     proxy_read_timeout 60s;
 }
 
-# トップは常に SPA
+# ドメイントップ: ベータ版 LP にリダイレクト（本番移行後は削除してSPAに戻す）
+# TODO: Vue.js SPA 本番移行後にこの location を削除し、下記 SPA フォールバックへ切り替える
 location = / {
-    try_files /index.html =404;
+    return 302 /portfolio/2_gallery_sample/;
 }
+
+# SPA フォールバック（将来: 上記 location = / を削除してこちらを有効化）
+# location = / {
+#     try_files /index.html =404;
+# }
 
 # Vue Router（history）で定義しているパスのみ index.html へフォールバック
 # フロントの routes を増やしたらここも追記すること（未定義パスは 404）

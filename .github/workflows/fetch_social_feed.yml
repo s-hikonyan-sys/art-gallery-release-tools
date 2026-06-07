@@ -1,0 +1,68 @@
+name: Fetch Social Feed
+
+# Instagram + Bluesky の投稿を取得して VPS に配置する
+# 利用 Secrets（release-tools 共通）:
+#   PROD_SSH_PRIVATE_KEY, PROD_SSH_KNOWN_HOSTS : VPS SSH 接続（既存）
+#   GOOGLE_API_KEY, GOOGLE_CX                  : Google Custom Search（追加）
+#   FACEBOOK_APP_TOKEN                          : Instagram oEmbed（追加）
+#   SLACK_WEBHOOK_URL                           : 失敗通知（既存）
+# 利用 Variables（release-tools 共通）:
+#   PROD_HOST, PROD_SSH_USER, SOCIAL_FEED_PATH  : PROD_HOST/PROD_SSH_USER は既存
+
+on:
+  schedule:
+    # 6時間おき（0:00 / 6:00 / 12:00 / 18:00 UTC）
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout art-gallery-release-tools
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Fetch Instagram posts
+        env:
+          GOOGLE_API_KEY:     ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_CX:          ${{ secrets.GOOGLE_CX }}
+          FACEBOOK_APP_TOKEN: ${{ secrets.FACEBOOK_APP_TOKEN }}
+        run: |
+          mkdir -p data
+          python scripts/fetch_instagram.py
+
+      - name: Fetch Bluesky posts
+        run: python scripts/fetch_bluesky.py
+
+      - name: Build social_feed.json
+        run: python scripts/build_feed.py
+
+      - name: Deploy to VPS
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          rsync -avz --checksum \
+            dist/social_feed.json \
+            "${{ vars.PROD_SSH_USER }}@${{ vars.PROD_HOST }}:${{ vars.SOCIAL_FEED_PATH }}/social_feed.json"
+        env:
+          SSH_KEY: ~/.ssh/deploy_key
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"⚠️ fetch_social_feed 失敗: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"

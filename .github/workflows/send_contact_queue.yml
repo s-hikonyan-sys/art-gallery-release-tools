@@ -1,0 +1,70 @@
+name: Send Contact Queue
+
+# backend の /app/contact_queue/ に溜まったお問い合わせを Slack に送信する
+# 利用 Secrets（release-tools 共通）:
+#   PROD_SSH_PRIVATE_KEY, PROD_SSH_KNOWN_HOSTS : VPS SSH 接続（既存）
+#   SLACK_WEBHOOK_URL                           : Slack 送信先（追加）
+# 利用 Variables:
+#   PROD_HOST, PROD_SSH_USER                    : VPS 接続情報（既存）
+#   CONTACT_QUEUE_PATH                          : キューディレクトリ（例: /app/contact_queue）
+
+on:
+  schedule:
+    # 5分おき
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  send-queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout art-gallery-release-tools
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROD_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+
+      - name: Pull contact queue from VPS
+        run: |
+          rsync -avz \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            "${{ vars.PROD_SSH_USER }}@${{ vars.PROD_HOST }}:${{ vars.CONTACT_QUEUE_PATH }}/" \
+            /tmp/contact_queue/
+        continue-on-error: true  # キューが空の場合は rsync が 0 件でも正常終了
+
+      - name: Send queued contacts to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          QUEUE_DIR:         /tmp/contact_queue
+        run: python scripts/send_contact_queue.py
+
+      - name: Push back processed queue to VPS
+        if: always()
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            /tmp/contact_queue/ \
+            "${{ vars.PROD_SSH_USER }}@${{ vars.PROD_HOST }}:${{ vars.CONTACT_QUEUE_PATH }}/"
+        continue-on-error: true
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"⚠️ send_contact_queue 失敗: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
