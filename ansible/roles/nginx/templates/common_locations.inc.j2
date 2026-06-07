@@ -27,6 +27,11 @@ location = /portfolio {
     return 301 /portfolio/;
 }
 
+# ギャラリーサンプル LP（プロモーション用）
+location = /portfolio/2_gallery_sample {
+    return 301 /portfolio/2_gallery_sample/;
+}
+
 location ^~ /portfolio/ {
     alias /usr/share/nginx/portfolio/;
     index index.html;
