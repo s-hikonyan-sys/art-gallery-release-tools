@@ -23,3 +23,11 @@ backend_deployments:
     ref_commit_sha: 5ec8e1645e2970cce3cb4624228b262ec0b5e67e
     image_source_sha: 5ec8e1645e2970cce3cb4624228b262ec0b5e67e
     workflow_run_url: https://github.com/s-hikonyan-sys/art-gallery-release-tools/actions/runs/27090029578
+  - timestamp: "2026-06-08T10:10:16Z"
+    deploy_type: image
+    release_version: 1.0.0
+    code_version: null
+    backend_ref: main
+    ref_commit_sha: null
+    image_source_sha: 5ec8e1645e2970cce3cb4624228b262ec0b5e67e
+    workflow_run_url: https://github.com/s-hikonyan-sys/art-gallery-release-tools/actions/runs/27130517810
