@@ -6,7 +6,7 @@
 backend_code:
   1.0.0:
     source_ref: main
-    source_sha: 4816aaa74c3262e39aa3caf2e4ae967b697bcb80
-    registered_by_run_id: "26519293371"
+    source_sha: 5ec8e1645e2970cce3cb4624228b262ec0b5e67e
+    registered_by_run_id: "27468768290"
     registered_by_workflow: Register Backend Code Version
     registered_at_utc: ""
