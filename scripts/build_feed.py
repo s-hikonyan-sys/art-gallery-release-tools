@@ -32,18 +32,28 @@ def load_json(path: Path) -> list:
 
 
 def normalize_instagram(items: list) -> list:
-    """Instagram oEmbed データを統一フォーマットに変換する。"""
+    """Instagram instaloader データを統一フォーマットに変換する。"""
     result = []
     for item in items[:MAX_INSTAGRAM]:
-        if not item.get("html"):
+        shortcode = item.get("shortcode", "")
+        if not shortcode and not item.get("url"):
             continue
+
+        embed_html = (
+            f'<blockquote class="instagram-media" '
+            f'data-instgrm-permalink="https://www.instagram.com/p/{shortcode}/" '
+            f'data-instgrm-version="14"></blockquote>'
+        ) if shortcode else ""
+
         result.append({
             "source":      "instagram",
             "type":        "oembed",
-            "html":        item["html"],
+            "html":        embed_html,
             "author_name": item.get("author_name", ""),
             "url":         item.get("url", ""),
             "thumbnail":   item.get("thumbnail", ""),
+            "caption":     item.get("caption", "")[:200],
+            "created_at":  item.get("created_at", ""),
             "fetched_at":  item.get("fetched_at", ""),
         })
     return result

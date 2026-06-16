@@ -3,8 +3,6 @@ name: Fetch Social Feed
 # Instagram + Bluesky の投稿を取得して VPS に配置する
 # 利用 Secrets（release-tools 共通）:
 #   PROD_SSH_PRIVATE_KEY, PROD_SSH_KNOWN_HOSTS : VPS SSH 接続（既存）
-#   GOOGLE_API_KEY, GOOGLE_CX                  : Google Custom Search（追加）
-#   FACEBOOK_APP_TOKEN                          : Instagram oEmbed（追加）
 # 利用 Variables（release-tools 共通）:
 #   PROD_HOST, PROD_SSH_USER, SOCIAL_FEED_PATH  : PROD_HOST/PROD_SSH_USER は既存
 #   PROD_APP_USER                               : ファイル配置ユーザー（例: artgallery）
@@ -31,13 +29,9 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests instaloader
 
       - name: Fetch Instagram posts
-        env:
-          GOOGLE_API_KEY:     ${{ secrets.GOOGLE_API_KEY }}
-          GOOGLE_CX:          ${{ secrets.GOOGLE_CX }}
-          FACEBOOK_APP_TOKEN: ${{ secrets.FACEBOOK_APP_TOKEN }}
         run: |
           mkdir -p data
           python scripts/fetch_instagram.py
