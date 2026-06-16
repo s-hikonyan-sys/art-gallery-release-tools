@@ -37,7 +37,7 @@ location ^~ /portfolio/ {
     index index.html;
 }
 
-# SNSフィードJSON（GitHub Actions が定期配置）
+# SNSフィードJSON（ホスト {{ deployment_paths.dist_dir }}/social → コンテナ /var/www/social）
 location ^~ /social/ {
     alias /var/www/social/;
     add_header Access-Control-Allow-Origin *;
