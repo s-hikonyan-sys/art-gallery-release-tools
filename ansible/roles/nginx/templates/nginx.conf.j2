@@ -42,6 +42,10 @@ http {
     gzip_min_length 1024;
     gzip_types text/plain text/css text/xml application/json application/javascript application/xml+rss application/atom+xml image/svg+xml;
 
+    # /api 用レートリミット（適用箇所は common_locations.inc の location /api）
+    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=5r/s;
+    limit_req_status 429;
+
     upstream backend_server {
         server {{ backend_host | mandatory('backend_host must be set in inventory') }}:{{ backend_port | mandatory('backend_port must be set in inventory') }};
     }
@@ -90,6 +94,26 @@ http {
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
         include /etc/nginx/conf.d/common_locations.inc;
+    }
+{% endif %}
+
+    # --- 不正 Host 対策: ドメイン名以外（IP 直打ち・os3-*.vs.sakura.ne.jp 等）は接続破棄 ---
+    server {
+        listen 80 default_server;
+        server_name _;
+        return 444;
+    }
+
+{% if ssl_enabled | mandatory('ssl_enabled must be set in inventory') %}
+    server {
+        listen 443 ssl default_server;
+        server_name _;
+
+        # 証明書は TLS ハンドシェイク成立のためだけに流用し、即座に接続破棄
+        ssl_certificate {{ ssl_certificate | mandatory('ssl_certificate must be set in inventory') }};
+        ssl_certificate_key {{ ssl_certificate_key | mandatory('ssl_certificate_key must be set in inventory') }};
+
+        return 444;
     }
 {% endif %}
 }
